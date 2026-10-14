@@ -42,6 +42,14 @@ pub struct AppState {
     pub ble_receiver: broadcast::Receiver<()>,
     pub discovery_running: AtomicBool,
     pub rqs: Mutex<RQS>,
+    /// Token opachi BLE: id (`endpoint_hex-address`) -> `BleReceiver` (clone).
+    /// Condiviso tra `qsd_scan_ble` e `qsd_send_ble`; cap 32, evict arbitrario.
+    pub ble_receivers: Mutex<std::collections::HashMap<String, rqs_lib::hdl::BleReceiver>>,
+    /// CancellationToken per `send_id` BLE (fase pre-handshake + upgrade wait).
+    /// Il core onora anche `TransferCancel` via `message_sender` per l'outbound;
+    /// `qsd_cancel_send` fa entrambe le cose.
+    pub ble_cancel:
+        Mutex<std::collections::HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 #[tokio::main]
@@ -73,6 +81,9 @@ async fn main() -> Result<(), anyhow::Error> {
             cmds::qsd_stop_discovery,
             cmds::qsd_consent,
             cmds::qsd_send_lan,
+            cmds::qsd_scan_ble,
+            cmds::qsd_send_ble,
+            cmds::qsd_cancel_send,
             cmds::qsd_get_hostname,
             cmds::get_hostname,
             cmds::change_download_path,
@@ -148,6 +159,8 @@ async fn main() -> Result<(), anyhow::Error> {
                         ble_receiver,
                         discovery_running: AtomicBool::new(false),
                         rqs: Mutex::new(rqs),
+                        ble_receivers: Mutex::default(),
+                        ble_cancel: Mutex::default(),
                     });
                 });
             });

@@ -5,7 +5,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToastStore } from '../vue_lib/stores/useToastStore';
 import { ToastType } from '../vue_lib/types';
 import type { TransferView } from '../types/qsd';
-import { baseName, humanSize } from '../types/qsd';
+import { HANDSHAKE_STATES, baseName, humanSize } from '../types/qsd';
 import { useTransfersStore } from '../stores/transfers';
 import ConsentCard from './ConsentCard.vue';
 
@@ -22,7 +22,15 @@ const t = computed(() => props.transfer);
 const meta = computed(() => props.transfer.metadata);
 const deviceName = computed(() => meta.value?.source?.name ?? 'UNKNOWN');
 const files = computed(() => meta.value?.files ?? []);
-const isConsent = computed(() => t.value.state === 'WaitingForUserConsent');
+const isConsent = computed(() => t.value.state === 'WaitingForUserConsent' && t.value.kind !== 'Outbound');
+/** Outbound waiting-for-phone-accept: handshake transients o WaitingForUserConsent
+ *  su un Outbound (il PIN si verifica sul telefono, nessun Accept/Decline qui). */
+const isOutboundWaiting = computed(() =>
+	t.value.kind === 'Outbound'
+	&& (t.value.state === 'WaitingForUserConsent' || HANDSHAKE_STATES.has(t.value.state)),
+);
+const outboundPeer = computed(() => meta.value?.source?.name ?? deviceName.value);
+const outboundPin = computed(() => meta.value?.pin_code ?? null);
 const isActive = computed(() => ['SentIntroduction', 'SendingFiles', 'ReceivingFiles'].includes(t.value.state));
 const isSending = computed(() => ['SentIntroduction', 'SendingFiles'].includes(t.value.state));
 const isFinished = computed(() => t.value.state === 'Finished');
@@ -130,10 +138,34 @@ async function openTarget() {
 
 <template>
 	<ConsentCard v-if="isConsent" :transfer="transfer" @accept="accept" @decline="decline" />
+	<div v-else-if="isOutboundWaiting" class="border border-slate-800 bg-slate-900 p-3 font-mono text-[12px]" aria-live="polite">
+		<div class="flex items-baseline justify-between gap-2 min-w-0">
+			<p class="text-[13px] font-bold text-slate-200 truncate" :title="outboundPeer">
+				{{ outboundPeer }}
+			</p>
+			<p class="text-slate-500 shrink-0">
+				{{ t.state.toUpperCase() }}
+			</p>
+		</div>
+		<p class="mt-1 text-slate-300">
+			WAITING FOR ACCEPT ON {{ outboundPeer.toUpperCase() }} — CHECK THE PIN THERE, NO BUTTON HERE<template v-if="outboundPin">
+				· PIN {{ outboundPin }}
+			</template>
+		</p>
+		<div class="flex justify-end mt-2">
+			<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="cancel">
+				CANCEL
+			</button>
+		</div>
+	</div>
 	<div v-else class="border border-slate-800 bg-slate-900 p-3 font-mono text-[12px]">
 		<div class="flex items-baseline justify-between gap-2 min-w-0">
-			<p class="text-[13px] font-bold text-slate-200 truncate" :title="deviceName">{{ deviceName }}</p>
-			<p class="text-slate-500 shrink-0">{{ t.state.toUpperCase() }}</p>
+			<p class="text-[13px] font-bold text-slate-200 truncate" :title="deviceName">
+				{{ deviceName }}
+			</p>
+			<p class="text-slate-500 shrink-0">
+				{{ t.state.toUpperCase() }}
+			</p>
 		</div>
 
 		<div v-if="isActive" class="mt-2">
@@ -142,7 +174,9 @@ async function openTarget() {
 				<span class="tabular-nums">{{ humanSize(meta?.ack_bytes ?? 0) }} / {{ humanSize(meta?.total_bytes ?? 0) }}</span>
 				<span class="tabular-nums">ETA {{ eta }}</span>
 			</div>
-			<div class="grid mt-1" :style="{ gridTemplateColumns: `repeat(${BLOCKS}, minmax(0,1fr))`, gap: '2px' }" role="progressbar" :aria-valuenow="Math.round(frac * 100)" aria-valuemin="0" aria-valuemax="100">
+			<div
+				class="grid mt-1" :style="{ gridTemplateColumns: `repeat(${BLOCKS}, minmax(0,1fr))`, gap: '2px' }" role="progressbar" :aria-valuenow="Math.round(frac * 100)"
+				aria-valuemin="0" aria-valuemax="100">
 				<span
 					v-for="i in BLOCKS" :key="i" class="h-3"
 					:class="i <= filledBlocks ? 'bg-sky-400' : 'bg-slate-800'" />

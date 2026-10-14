@@ -995,6 +995,7 @@ name = "directdrop"
 version = "0.11.5"
 dependencies = [
  "anyhow",
+ "bluer",
  "fern",
  "humantime",
  "log",

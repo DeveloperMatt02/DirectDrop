@@ -4,8 +4,8 @@ import { gt } from 'semver';
 import { useToastStore } from './stores/useToastStore';
 import { ToastType } from './types';
 import { baseName, describeTransfer, humanSize, validateSendFiles } from '../types/qsd';
-import type { EndpointDto, TransferView } from '../types/qsd';
-import { useDevicesStore } from '../stores/devices';
+import type { BleReceiverDto, EndpointDto, TransferView } from '../types/qsd';
+import { bleKey, useDevicesStore } from '../stores/devices';
 import { useSessionStore } from '../stores/session';
 import { useTransfersStore } from '../stores/transfers';
 
@@ -51,6 +51,19 @@ export async function sendToEndpoint(endpointId: string, files: string[]): Promi
 		addr: `${ep.ip}:${ep.port}`,
 		files,
 	});
+}
+
+/** Send staged files to a BLE receiver (qsd_send_ble). Returns the send_id. */
+export async function sendToBle(receiverId: string, files: string[]): Promise<string> {
+	const toasts = useToastStore();
+	assertSendableFiles(files);
+	const devices = useDevicesStore();
+	const rec: BleReceiverDto | undefined = devices.bleReceivers.get(receiverId);
+	if (!rec) {
+		toasts.addToast('Device unknown — re-scan Bluetooth first', ToastType.Error);
+		throw new Error('ble receiver unknown (re-scan?)');
+	}
+	return await useTransfersStore().sendBle({ receiver_id: bleKey(rec), files });
 }
 
 /** Session actions previously on TauriVM (settings/autostart/visibility). */
@@ -115,6 +128,7 @@ export const utils = {
 	displayNames,
 	assertSendableFiles,
 	sendToEndpoint,
+	sendToBle,
 	setAutoStart,
 	applyAutoStart,
 	invertVisibility,

@@ -170,6 +170,22 @@ pub struct ConsentDto {
     pub action: TransferActionDto,
 }
 
+/// Input `qsd_scan_ble` (one-shot BLE scan, §1.1).
+/// `timeout_s` range 3–30, default 30; `settle` fisso 3 s.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ScanBleInput {
+    pub name: Option<String>,
+    pub timeout_s: Option<u64>,
+}
+
+/// Input `qsd_send_ble` (token opaco da `qsd_scan_ble`).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SendBleInput {
+    pub receiver_id: String,
+    pub files: Vec<String>,
+    pub send_id: Option<String>,
+}
+
 /// Fase 2 (BLE): mantenuto qui perche' parte del wire versionato.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BleReceiverDto {
@@ -500,6 +516,29 @@ mod tests {
         let json = serde_json::to_string(&dto).unwrap();
         let back: EndpointDto = serde_json::from_str(&json).unwrap();
         assert_eq!(back, dto);
+    }
+
+    #[test]
+    fn scan_ble_send_ble_roundtrip() {
+        let scan = ScanBleInput { name: Some("Pixel".into()), timeout_s: Some(30) };
+        let json = serde_json::to_string(&scan).unwrap();
+        let back: ScanBleInput = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, scan);
+        // Default wire: campi assenti -> None.
+        let empty: ScanBleInput = serde_json::from_str("{}").unwrap();
+        assert_eq!(empty, ScanBleInput { name: None, timeout_s: None });
+
+        let send = SendBleInput {
+            receiver_id: "abcd-AA:BB:CC:DD:EE:FF".into(),
+            files: vec!["/tmp/a.pdf".into()],
+            send_id: Some("ble-123".into()),
+        };
+        let json = serde_json::to_string(&send).unwrap();
+        let back: SendBleInput = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, send);
+        let no_id: SendBleInput =
+            serde_json::from_str(r#"{"receiver_id":"x","files":[]}"#).unwrap();
+        assert_eq!(no_id.send_id, None);
     }
 
     #[test]

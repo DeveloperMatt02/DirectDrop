@@ -7,7 +7,8 @@ const transfers = useTransfersStore();
 
 const connecting = computed(() =>
 	[...transfers.items.values()].filter((t) =>
-		!['WaitingForUserConsent', 'SentIntroduction', 'SendingFiles', 'ReceivingFiles', 'Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)),
+		!['SentIntroduction', 'SendingFiles', 'ReceivingFiles', 'Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)
+		&& (t.state !== 'WaitingForUserConsent' || t.kind === 'Outbound')),
 );
 const done = computed(() =>
 	[...transfers.items.values()].filter((t) => ['Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)),
@@ -16,7 +17,9 @@ const done = computed(() =>
 
 <template>
 	<section aria-label="Transfer log" class="border border-slate-800 bg-slate-900 p-4 flex flex-col gap-3">
-		<h2 class="font-mono text-[11px] tracking-[0.2em] text-slate-400">LOG · HANDSHAKE + COMPLETED</h2>
+		<h2 class="font-mono text-[11px] tracking-[0.2em] text-slate-400">
+			LOG · HANDSHAKE + COMPLETED
+		</h2>
 		<div v-if="connecting.length > 0" class="flex flex-col gap-2" aria-label="Connecting">
 			<TransferCard v-for="t in connecting" :key="t.id" :transfer="t" />
 		</div>
