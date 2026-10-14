@@ -1,15 +1,19 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use rqs_lib::Visibility;
-use tauri::{AppHandle, Emitter, Wry};
+use tauri::AppHandle;
 use tauri_plugin_store::{Store, StoreExt};
 
-fn _get_store(app_handle: &AppHandle) -> Arc<Store<Wry>> {
+fn _get_store(app_handle: &AppHandle) -> Arc<Store<tauri::Wry>> {
     app_handle
         .store_builder(".settings.json")
         .auto_save(Duration::from_millis(100))
         .build()
         .unwrap()
+}
+
+fn default_device_name() -> String {
+    sys_metrics::host::get_hostname().unwrap_or_else(|_| "Unknown device".into())
 }
 
 pub fn init_default(app_handle: &AppHandle) {
@@ -29,6 +33,10 @@ pub fn init_default(app_handle: &AppHandle) {
 
     if !store.has("startminimized") {
         store.set("startminimized", false);
+    }
+
+    if !store.has("device_name") {
+        store.set("device_name", default_device_name());
     }
 }
 
@@ -58,13 +66,26 @@ pub fn get_visibility(app_handle: &AppHandle) -> Visibility {
         .unwrap_or(Visibility::Visible)
 }
 
-pub fn set_visibility(app_handle: &AppHandle, v: Visibility) -> Result<(), anyhow::Error> {
+/// Persiste senza emettere: l'emit `qsd://visibility` spetta al bridge
+/// (`bridge.rs`), unico produttore dell'evento.
+pub fn save_visibility(app_handle: &AppHandle, v: Visibility) -> Result<(), anyhow::Error> {
+    let store = _get_store(app_handle);
+    store.set("visibility", v as u8);
+    Ok(())
+}
+
+pub fn get_device_name(app_handle: &AppHandle) -> String {
     let store = _get_store(app_handle);
 
-    store.set("visibility", v as u8);
-    app_handle.emit("visibility_updated", ())?;
+    store
+        .get("device_name")
+        .and_then(|json| json.as_str().map(String::from))
+        .unwrap_or_else(default_device_name)
+}
 
-    Ok(())
+pub fn set_device_name(app_handle: &AppHandle, name: &str) {
+    let store = _get_store(app_handle);
+    store.set("device_name", name);
 }
 
 pub fn get_download_path(app_handle: &AppHandle) -> Option<PathBuf> {
@@ -73,6 +94,16 @@ pub fn get_download_path(app_handle: &AppHandle) -> Option<PathBuf> {
     store
         .get("download_path")
         .and_then(|json| json.as_str().map(PathBuf::from))
+}
+
+pub fn set_download_path(app_handle: &AppHandle, path: Option<&PathBuf>) {
+    let store = _get_store(app_handle);
+    match path {
+        Some(p) => store.set("download_path", p.to_string_lossy().as_ref()),
+        None => {
+            store.delete("download_path");
+        }
+    }
 }
 
 pub fn get_logging_level(app_handle: &AppHandle) -> Option<String> {

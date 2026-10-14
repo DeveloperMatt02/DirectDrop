@@ -1,24 +1,22 @@
 #[cfg(target_os = "linux")]
 use notify_rust::Notification;
-#[cfg(target_os = "linux")]
-use rqs_lib::{
-    channel::{ChannelAction, ChannelDirection, ChannelMessage},
-    Visibility,
-};
+use rqs_lib::Visibility;
 use tauri::AppHandle;
-#[cfg(target_os = "linux")]
-use tauri::Manager;
 #[cfg(not(target_os = "linux"))]
 use tauri_plugin_notification::NotificationExt;
+use tauri::Manager;
 
-#[cfg(target_os = "linux")]
-use crate::cmds;
+use crate::AppState;
 
-pub fn send_request_notification(name: String, id: String, app_handle: &AppHandle) {
-    // Is not used in macos, get rid of warning
-    let _ = id;
-
-    let body = format!("{name} want to initiate a transfer");
+/// Notifica di consenso con PIN (parita' CLI): Accept/Decline.
+pub fn send_request_notification(
+    name: String,
+    pin: Option<String>,
+    id: String,
+    app_handle: &AppHandle,
+) {
+    let pin = pin.map(|p| format!(" · PIN {p}")).unwrap_or_default();
+    let body = format!("{name} wants to share with you{pin}");
 
     #[cfg(not(target_os = "linux"))]
     let _ = app_handle
@@ -38,31 +36,25 @@ pub fn send_request_notification(name: String, id: String, app_handle: &AppHandl
     {
         Ok(n) => {
             let capp_handle = app_handle.clone();
-            // TODO - Meh, untracked, unwaited tasks...
-            #[cfg(target_os = "linux")]
             tokio::task::spawn(async move {
                 n.wait_for_action(|action| match action {
                     "accept" => {
-                        let _ = cmds::send_to_rs(
-                            ChannelMessage {
-                                id,
-                                direction: ChannelDirection::FrontToLib,
-                                action: Some(ChannelAction::AcceptTransfer),
-                                ..Default::default()
+                        let state: tauri::State<'_, AppState> = capp_handle.state();
+                        let _ = state.message_sender.send(rqs_lib::channel::ChannelMessage {
+                            id: id.clone(),
+                            msg: rqs_lib::channel::Message::Lib {
+                                action: rqs_lib::channel::TransferAction::ConsentAccept,
                             },
-                            capp_handle.state(),
-                        );
+                        });
                     }
                     "reject" => {
-                        let _ = cmds::send_to_rs(
-                            ChannelMessage {
-                                id,
-                                direction: ChannelDirection::FrontToLib,
-                                action: Some(ChannelAction::RejectTransfer),
-                                ..Default::default()
+                        let state: tauri::State<'_, AppState> = capp_handle.state();
+                        let _ = state.message_sender.send(rqs_lib::channel::ChannelMessage {
+                            id: id.clone(),
+                            msg: rqs_lib::channel::Message::Lib {
+                                action: rqs_lib::channel::TransferAction::ConsentDecline,
                             },
-                            capp_handle.state(),
-                        );
+                        });
                     }
                     _ => (),
                 });
@@ -96,12 +88,15 @@ pub fn send_temporarily_notification(app_handle: &AppHandle) {
     {
         Ok(n) => {
             let capp_handle = app_handle.clone();
-            // TODO - Meh, untracked, unwaited tasks...
-            #[cfg(target_os = "linux")]
             tokio::task::spawn(async move {
                 n.wait_for_action(|action| match action {
                     "visible" => {
-                        cmds::change_visibility(Visibility::Temporarily, capp_handle.state());
+                        let state: tauri::State<'_, AppState> = capp_handle.state();
+                        state
+                            .rqs
+                            .lock()
+                            .unwrap()
+                            .change_visibility(Visibility::Temporarily);
                     }
                     "ignore" => {}
                     _ => (),

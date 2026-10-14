@@ -1,0 +1,38 @@
+{
+  "_note": "Fixture del wire format qsd://* (DTO_VERSION 1). Fonte: dto.rs <-> types/qsd.ts, esempi da GUI_ARCHITECTURE.md §3.3.",
+  "dto_version": 1,
+  "transfer_consent": {
+    "id": "192.168.1.5:51234",
+    "kind": "Inbound",
+    "state": "WaitingForUserConsent",
+    "metadata": {
+      "id": "192.168.1.5:51234",
+      "source": { "name": "Pixel 10", "device_type": "Phone" },
+      "pin_code": "4821",
+      "payload_kind": "Files",
+      "payload_preview": null,
+      "files": ["IMG_001.jpg", "video.mp4"],
+      "text": null,
+      "url": null,
+      "wifi_ssid": null,
+      "total_bytes": 38210432,
+      "ack_bytes": 0
+    }
+  },
+  "consent_accept": { "id": "192.168.1.5:51234", "action": "ConsentAccept" },
+  "send_lan": {
+    "id": "3f2a-uuid",
+    "name": "Pixel 10",
+    "addr": "192.168.1.20:46257",
+    "files": ["/home/u/Docs/report.pdf"]
+  },
+  "endpoint_removed": {
+    "id": "192.168.1.20:46257",
+    "fullname": "",
+    "name": null,
+    "ip": null,
+    "port": null,
+    "device_type": null,
+    "present": false
+  }
+}

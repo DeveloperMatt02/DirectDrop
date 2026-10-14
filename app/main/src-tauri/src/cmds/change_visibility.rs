@@ -1,10 +1,16 @@
-use rqs_lib::Visibility;
-
 use crate::AppState;
+use crate::dto::{GuiError, VisibilityDto};
 
 #[tauri::command]
-pub fn change_visibility(message: Visibility, state: tauri::State<'_, AppState>) {
-    info!("change_visibility: {message:?}");
-
-    state.rqs.lock().unwrap().change_visibility(message);
+pub fn qsd_set_visibility(
+    v: VisibilityDto,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), GuiError> {
+    info!("qsd_set_visibility: {v:?}");
+    state
+        .rqs
+        .lock()
+        .map_err(|e| GuiError::core(format!("state lock poisoned: {e}")))?
+        .change_visibility(v.into());
+    Ok(())
 }
