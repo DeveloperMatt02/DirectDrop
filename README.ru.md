@@ -47,6 +47,11 @@ Debian/Ubuntu, `.AppImage` в `~/.local/bin` во всех остальных с
 curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash
 ```
 
+Установщик спрашивает, какую редакцию установить (GUI, если доступен, иначе демон).
+Для установки без вопросов: `DIRECTDROP_EDITION=cli curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash`,
+или `curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash -s -- --cli`
+(`--gui` только GUI, `--auto` явное значение по умолчанию).
+
 Прямые команды для каждого дистрибутива (тот же источник, без вспомогательного скрипта):
 
 ```bash

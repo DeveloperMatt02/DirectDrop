@@ -45,6 +45,9 @@
 curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash
 ```
 
+インストーラーはどのエディションをインストールするか確認します（利用可能な場合はGUI、そうでなければデーモン）。
+無人インストールの場合：`DIRECTDROP_EDITION=cli curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash`、または`curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash -s -- --cli`（`--gui`はGUIのみ、`--auto`は明示的なデフォルト）。
+
 ディストリビューションごとの直接コマンドです（同じソースで、ヘルパースクリプトは使いません）：
 
 ```bash

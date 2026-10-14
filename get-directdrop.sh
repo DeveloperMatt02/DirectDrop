@@ -12,6 +12,10 @@
 # the headless daemon is disabled: the GUI embeds its own receiver and two
 # receivers would advertise the same device twice and fight over the
 # per-user Wi-Fi helpers.
+#
+# Edition: --gui / --cli / --auto (default), or DIRECTDROP_EDITION env.
+# Without either and with a terminal attached, the edition is asked
+# interactively (prompt reads /dev/tty, so `curl | bash` is safe).
 set -eu
 
 REPO=DeveloperMatt02/DirectDrop
@@ -20,12 +24,52 @@ say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
+usage() {
+  cat <<USAGE
+Usage: $0 [--gui|--cli|--auto] [-h|--help]
+
+Installs DirectDrop from the latest GitHub release.
+  --gui    desktop GUI only (fails if the release has no GUI bundle yet)
+  --cli    headless quickshare-direct daemon only
+  --auto   GUI if available, else the daemon (default)
+Env DIRECTDROP_EDITION=gui|cli|auto overrides the default; flags win over
+env. With none given and a terminal attached, the edition is asked
+(piped stdin is safe: the prompt uses /dev/tty).
+USAGE
+}
+
+EDITION_FLAG=
+for arg in "$@"; do
+  case $arg in
+    --gui) EDITION_FLAG=gui ;;
+    --cli) EDITION_FLAG=cli ;;
+    --auto) EDITION_FLAG=auto ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option '$arg' (see --help)" ;;
+  esac
+done
+
 [ "$(uname -s)" = Linux ] || die "Linux only"
 case $(uname -m) in
   x86_64 | amd64) ARCH=x86_64 DEB_ARCH=amd64 ;;
   aarch64 | arm64) ARCH=aarch64 DEB_ARCH=arm64 ;;
   *) die "unsupported CPU architecture $(uname -m) (this installer ships x86_64 and aarch64 builds)" ;;
 esac
+
+EDITION=${EDITION_FLAG:-${DIRECTDROP_EDITION:-auto}}
+case $EDITION in
+  auto|gui|cli) ;;
+  *) die "DIRECTDROP_EDITION must be gui, cli or auto (got '$EDITION')" ;;
+esac
+if [ "$EDITION" = auto ] && [ -c /dev/tty ]; then
+  printf '\nInstall which edition?\n  1) Automatic: GUI if available, else daemon (default)\n  2) GUI only\n  3) CLI daemon only\nChoice [1]: ' > /dev/tty
+  choice=
+  IFS= read -r choice < /dev/tty 2>/dev/null || choice=
+  case $choice in
+    2|gui|GUI) EDITION=gui ;;
+    3|cli|CLI) EDITION=cli ;;
+  esac
+fi
 
 if [ "$(id -u)" -eq 0 ]; then
   SUDO=
@@ -52,16 +96,25 @@ say "looking up the latest $REPO release"
 fetch "https://api.github.com/repos/$REPO/releases/latest" "$TMP/release.json" \
   || die "couldn't reach the GitHub API (offline or rate-limited?)"
 
-# Pick a bundle URL from the release JSON ($TMP/release.json): prefer the
-# DirectDrop GUI build for this format+CPU, fall back to any (daemon) package
-# for the same format+CPU. Always prints (possibly empty), never fails.
+# Pick a bundle URL from the release JSON ($TMP/release.json), honoring EDITION:
+# gui = DirectDrop GUI builds only, cli = anything but GUI (daemon packages),
+# auto = GUI first, daemon fallback. Always prints (possibly empty), never fails.
+match_url() { # product-filter ext arch-ere ('DirectDrop' | '!' | '')
+  # NOTE: match on the asset file name (after the last '/'), never on the
+  # full URL: every URL contains '/DeveloperMatt02/DirectDrop/releases/...'.
+  grep '"browser_download_url"' "$TMP/release.json" \
+    | { case $1 in '') cat ;; '!') grep -v "/DirectDrop[^/]" ;; *) grep "/DirectDrop[^/]" ;; esac; } \
+    | grep "\.$2\"" | grep -E "$3" | head -n 1 | cut -d '"' -f 4 || true
+}
+
 asset_url() { # ext arch-ere
-  for product in DirectDrop ''; do
-    if [ -n "$product" ]; then filt() { grep "$product"; }; else filt() { cat; }; fi
-    url=$(grep '"browser_download_url"' "$TMP/release.json" | filt \
-      | grep "\.$1\"" | grep -E "$2" | head -n 1 | cut -d '"' -f 4 || true)
-    if [ -n "$url" ]; then printf '%s' "$url"; return 0; fi
-  done
+  case $EDITION in
+    gui) match_url DirectDrop "$1" "$2"; return 0 ;;
+    cli) match_url '!' "$1" "$2"; return 0 ;;
+  esac
+  url=$(match_url DirectDrop "$1" "$2")
+  if [ -n "$url" ]; then printf '%s' "$url"; return 0; fi
+  match_url '' "$1" "$2"
   return 0
 }
 
@@ -77,7 +130,7 @@ esac
 case $FORMAT in
   rpm)
     URL=$(asset_url rpm "$ARCH")
-    [ -n "$URL" ] || die "no .rpm for $ARCH in the latest $REPO release"
+    [ -n "$URL" ] || die "no $EDITION .rpm for $ARCH in the latest $REPO release"
     FILE=$TMP/$(basename "$URL")
     say "downloading $(basename "$URL")"
     fetch "$URL" "$FILE"
@@ -87,7 +140,7 @@ case $FORMAT in
     ;;
   deb)
     URL=$(asset_url deb "$DEB_ARCH")
-    [ -n "$URL" ] || die "no .deb for $DEB_ARCH in the latest $REPO release"
+    [ -n "$URL" ] || die "no $EDITION .deb for $DEB_ARCH in the latest $REPO release"
     FILE=$TMP/$(basename "$URL")
     say "downloading $(basename "$URL")"
     fetch "$URL" "$FILE"
@@ -97,8 +150,11 @@ case $FORMAT in
     $SUDO apt-get install -y "$FILE"
     ;;
   appimage)
+    if [ "$EDITION" = cli ]; then
+      die "no CLI AppImage exists; download quickshare-direct-$ARCH.tar.gz from https://github.com/$REPO/releases/latest"
+    fi
     URL=$(asset_url AppImage "$DEB_ARCH|$ARCH")
-    [ -n "$URL" ] || die "no .AppImage for $ARCH in the latest $REPO release"
+    [ -n "$URL" ] || die "no $EDITION .AppImage for $ARCH in the latest $REPO release"
     DEST="$HOME/.local/bin/$APP"
     mkdir -p "$HOME/.local/bin"
     say "installing $(basename "$URL") to $DEST"

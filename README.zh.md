@@ -45,6 +45,11 @@
 curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash
 ```
 
+安装程序会询问要安装哪个版本（如果可用则安装 GUI，否则安装守护进程）。
+无人值守安装：`DIRECTDROP_EDITION=cli curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash`，
+或 `curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash -s -- --cli`
+（`--gui` 仅安装 GUI，`--auto` 显式使用默认选项）。
+
 各发行版直接命令（同一来源，无需辅助脚本）：
 
 ```bash
