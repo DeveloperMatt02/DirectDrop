@@ -2,3 +2,7 @@ target/
 Cargo.lock
 *.snap
 gen
+.opencode/
+.github/agents/
+.github/hooks/
+.github/skills/
