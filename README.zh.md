@@ -66,6 +66,10 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 主窗口（操作模式控制台：状态头、实时笔记本 ⇄ 手机流程、发送面板、设备看板、传输队列）：
 
+## GUI 与无头守护进程：二选一
+
+GUI 安装包（`.deb` / `.rpm` / `.AppImage`）内置了自己的接收端；`quickshare-direct` 守护进程包则是同一个接收端的无头版本。同时运行两者会让笔记本以相同的设备名称广播两次，并争抢按用户划分的 Wi-Fi 辅助工具（`quickshare-ap@USER`、`quickshare-join@USER`），因此 `get-directdrop.sh` 在安装 GUI 安装包时都会禁用守护进程（`systemctl --user disable --now quickshare-direct`）。`.deb`/`.rpm` 版 GUI 还会将 DirectDrop 添加到应用菜单（搜索“DirectDrop”）；`.AppImage` 在集成之前不会显示（Gear Lever、appimaged，或手动编写 `.desktop` 文件）。要回到无头模式：退出 GUI 并运行 `systemctl --user enable --now quickshare-direct`。
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 传入传输——UKEY2 PIN 验证卡片，带 60 秒倒计时和自动拒绝：

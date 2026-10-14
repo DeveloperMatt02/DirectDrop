@@ -68,6 +68,10 @@ Oppure scegli manualmente il file dalla [ultima release](https://github.com/Deve
 
 Finestra principale (console in modalità operativa: intestazione di stato, flusso live laptop ⇄ telefono, pannello di invio, scheda dei dispositivi, coda dei trasferimenti):
 
+## GUI + demone headless: scegline uno
+
+I bundle della GUI (`.deb` / `.rpm` / `.AppImage`) integrano il proprio ricevitore; il pacchetto demone `quickshare-direct` è lo stesso ricevitore in modalità headless. Eseguirli entrambi insieme pubblicizza il laptop due volte con lo stesso nome di dispositivo e li fa confliggere per gli helper Wi-Fi per utente (`quickshare-ap@USER`, `quickshare-join@USER`), quindi `get-directdrop.sh` disabilita il demone (`systemctl --user disable --now quickshare-direct`) ogni volta che installa un bundle della GUI. La GUI `.deb`/`.rpm` aggiunge anche DirectDrop al menu delle applicazioni (cerca "DirectDrop"); il `.AppImage` no finché non viene integrato (Gear Lever, appimaged, o un file `.desktop` manuale). Per tornare a headless: chiudi la GUI ed esegui `systemctl --user enable --now quickshare-direct`.
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 Trasferimento in entrata — scheda di verifica PIN UKEY2 con conto alla rovescia di 60 s e rifiuto automatico:

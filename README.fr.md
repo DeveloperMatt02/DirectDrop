@@ -68,6 +68,10 @@ Ou choisissez l'artefact à la main depuis la [dernière version](https://github
 
 Fenêtre principale (console en mode exploitation : en-tête de statut, flux en direct portable ⇄ téléphone, panneau d'envoi, tableau des appareils, file de transferts) :
 
+## GUI + démon sans interface : choisissez-en un seul
+
+Les paquets GUI (`.deb` / `.rpm` / `.AppImage`) embarquent leur propre récepteur ; le paquet du démon `quickshare-direct` est le même récepteur sans interface. Exécuter les deux en même temps annonce le portable deux fois sous le même nom d'appareil et les fait se disputer les assistants Wi-Fi par utilisateur (`quickshare-ap@USER`, `quickshare-join@USER`), donc `get-directdrop.sh` désactive le démon (`systemctl --user disable --now quickshare-direct`) chaque fois qu'il installe un paquet GUI. La GUI `.deb`/`.rpm` ajoute aussi DirectDrop au menu des applications (cherchez "DirectDrop") ; l'`.AppImage` ne le fait pas tant qu'elle n'est pas intégrée (Gear Lever, appimaged, ou un fichier `.desktop` manuel). Pour revenir au mode sans interface : quittez la GUI et lancez `systemctl --user enable --now quickshare-direct`.
+
 ![Fenêtre principale de DirectDrop](docs/screenshots/gui-main.svg)
 
 Transfert entrant — carte de vérification du PIN UKEY2 avec compte à rebours de 60 s et refus automatique :

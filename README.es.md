@@ -68,6 +68,10 @@ O elige el archivo manualmente desde la [última versión](https://github.com/De
 
 Ventana principal (consola en modo operativo: encabezado de estado, flujo en vivo portátil ⇄ teléfono, panel de envío, tablero de dispositivos, cola de transferencias):
 
+## GUI + demonio headless: elige uno
+
+Los paquetes de la GUI (`.deb` / `.rpm` / `.AppImage`) incluyen su propio receptor; el paquete del demonio `quickshare-direct` es el mismo receptor sin interfaz. Ejecutar ambos a la vez anuncia el portátil dos veces con el mismo nombre de dispositivo y hace que compitan por los ayudantes Wi-Fi por usuario (`quickshare-ap@USER`, `quickshare-join@USER`), por lo que `get-directdrop.sh` desactiva el demonio (`systemctl --user disable --now quickshare-direct`) cuando instala un paquete de la GUI. La GUI `.deb`/`.rpm` también añade DirectDrop al menú de aplicaciones (busca "DirectDrop"); el `.AppImage` no lo hace hasta integrarlo (Gear Lever, appimaged o un archivo `.desktop` manual). Para volver al modo headless: sal de la GUI y ejecuta `systemctl --user enable --now quickshare-direct`.
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 Transferencia entrante — tarjeta de verificación PIN UKEY2 con cuenta atrás de 60 s y rechazo automático:

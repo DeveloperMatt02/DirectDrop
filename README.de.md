@@ -68,6 +68,19 @@ Oder wähle das Paket manuell aus dem [neuesten Release](https://github.com/Deve
 
 Hauptfenster (Operate-Mode-Konsole: Statuskopfzeile, Live-Laptop-⇄-Telefon-Fluss, Sendebereich, Geräteboard, Übertragungswarteschlange):
 
+## GUI oder Headless-Daemon: entscheide dich für eines
+
+Die GUI-Pakete (`.deb` / `.rpm` / `.AppImage`) enthalten ihren eigenen Empfänger; das
+`quickshare-direct`-Daemon-Paket ist derselbe Empfänger im Headless-Betrieb. Werden beide
+gleichzeitig ausgeführt, kündigt sich der Laptop zweimal unter demselben Gerätenamen an und sie
+streiten sich um die benutzerspezifischen WLAN-Helfer (`quickshare-ap@USER`,
+`quickshare-join@USER`), daher deaktiviert `get-directdrop.sh` den Daemon
+(`systemctl --user disable --now quickshare-direct`), wann immer es ein GUI-Paket installiert. Die
+`.deb`/`.rpm`-GUI fügt DirectDrop außerdem zum App-Menü hinzu (nach "DirectDrop" suchen); die
+`.AppImage` erst nach Integration (Gear Lever, appimaged oder eine manuelle `.desktop`-Datei). Um zum
+Headless-Betrieb zurückzukehren: GUI beenden und `systemctl --user enable --now quickshare-direct`
+ausführen.
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 Eingehende Übertragung — UKEY2-PIN-Verifizierungskarte mit 60-s-Countdown und automatischer Ablehnung:

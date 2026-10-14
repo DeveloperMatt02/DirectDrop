@@ -68,6 +68,10 @@ Ou escolha o artefato manualmente na [versão mais recente](https://github.com/D
 
 Janela principal (console em modo de operação: cabeçalho de estado, fluxo ao vivo laptop ⇄ celular, painel de envio, quadro de dispositivos, fila de transferências):
 
+## GUI + daemon headless: escolha um
+
+Os pacotes da GUI (`.deb` / `.rpm` / `.AppImage`) trazem o próprio receptor embutido; o pacote daemon `quickshare-direct` é o mesmo receptor em modo headless. Executar os dois ao mesmo tempo anuncia o laptop duas vezes com o mesmo nome de dispositivo e faz os dois disputarem os helpers Wi-Fi por usuário (`quickshare-ap@USER`, `quickshare-join@USER`), por isso o `get-directdrop.sh` desativa o daemon (`systemctl --user disable --now quickshare-direct`) sempre que instala um pacote da GUI. A GUI `.deb`/`.rpm` também adiciona o DirectDrop ao menu de aplicativos (pesquise "DirectDrop"); o `.AppImage` não aparece até ser integrado (Gear Lever, appimaged ou um arquivo `.desktop` manual). Para voltar ao modo headless: feche a GUI e execute `systemctl --user enable --now quickshare-direct`.
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 Transferência recebida — cartão de verificação de PIN UKEY2 com contagem regressiva de 60s e recusa automática:

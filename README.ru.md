@@ -68,6 +68,10 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 Главное окно (консоль в режиме работы: заголовок состояния, живая схема ноутбук ⇄ телефон, панель отправки, доска устройств, очередь передач):
 
+## GUI и безголовый демон: выберите что-то одно
+
+Пакеты GUI (`.deb` / `.rpm` / `.AppImage`) содержат встроенный приёмник; пакет демона `quickshare-direct` — тот же приёмник, но безголовый. Одновременный запуск обоих анонсирует ноутбук дважды под одним именем устройства и заставляет их бороться за пользовательские Wi-Fi-помощники (`quickshare-ap@USER`, `quickshare-join@USER`), поэтому `get-directdrop.sh` отключает демон (`systemctl --user disable --now quickshare-direct`) при каждой установке пакета GUI. GUI из `.deb`/`.rpm` также добавляет DirectDrop в меню приложений (ищите "DirectDrop"); `.AppImage` — нет, пока он не интегрирован (Gear Lever, appimaged или вручную созданный файл `.desktop`). Чтобы вернуться к безголовому режиму: закройте GUI и выполните `systemctl --user enable --now quickshare-direct`.
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 Входящая передача — карточка проверки UKEY2 PIN с 60-секундным обратным отсчётом и автоматическим отклонением:

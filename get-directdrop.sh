@@ -8,7 +8,10 @@
 # .deb via apt-get on Debian/Ubuntu, .AppImage into ~/.local/bin everywhere
 # else. Prefers the DirectDrop GUI build; falls back to the quickshare-direct
 # daemon package (same project; shipped by the qsd-v* daemon releases until
-# a v*.*.* tag publishes the GUI bundles).
+# a v*.*.* tag publishes the GUI bundles). When a GUI bundle is installed,
+# the headless daemon is disabled: the GUI embeds its own receiver and two
+# receivers would advertise the same device twice and fight over the
+# per-user Wi-Fi helpers.
 set -eu
 
 REPO=DeveloperMatt02/DirectDrop
@@ -113,7 +116,22 @@ case $(basename "$URL") in
   *) WHAT=daemon ;;
 esac
 
+# The GUI embeds its own receiver: keep a single advertiser on this machine.
+# Best effort, never fatal (no systemd / daemon not installed / root without SUDO_USER).
+disable_daemon() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  if [ "$(id -u)" -eq 0 ]; then
+    [ -n "${SUDO_USER:-}" ] || return 0
+    sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$SUDO_USER")" \
+      systemctl --user disable --now quickshare-direct.service >/dev/null 2>&1 || return 0
+  else
+    systemctl --user disable --now quickshare-direct.service >/dev/null 2>&1 || return 0
+  fi
+  say "headless daemon disabled (the GUI is the receiver now)"
+}
+
 if [ "$WHAT" = gui ]; then
+  disable_daemon
   say "done. Launch '$APP' (or DirectDrop from the app menu)."
 else
   say "done (this release ships the daemon; GUI bundles come with a v*.*.* tag)."

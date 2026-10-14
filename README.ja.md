@@ -66,6 +66,10 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 メインウィンドウです（オペレートモードのコンソール：ステータスヘッダー、ラップトップ ⇄ スマートフォンのライブフロー、送信ペイン、デバイスボード、転送キュー）：
 
+## GUI とヘッドレスデーモン：どちらか一方をお使いください
+
+GUI バンドル（`.deb` / `.rpm` / `.AppImage`）には受信機能が内蔵されています。`quickshare-direct` デーモンパッケージは、同じ受信機能をヘッドレスで提供します。両方を同時に実行すると、同じデバイス名でラップトップが二重にアドバタイズされ、ユーザーごとの Wi-Fi ヘルパー（`quickshare-ap@USER`、`quickshare-join@USER`）を奪い合うことになります。そのため、`get-directdrop.sh` は GUI バンドルをインストールする際にデーモンを無効化します（`systemctl --user disable --now quickshare-direct`）。`.deb`/`.rpm` 版の GUI は DirectDrop をアプリメニューにも追加します（"DirectDrop" で検索してください）。`.AppImage` 版は統合するまでは追加されません（Gear Lever、appimaged、または手動の `.desktop` ファイルで統合します）。ヘッドレスに戻すには、GUI を終了して `systemctl --user enable --now quickshare-direct` を実行します。
+
 ![DirectDrop main window](docs/screenshots/gui-main.svg)
 
 受信転送です — 60 秒カウントダウンと自動辞退付きの UKEY2 PIN 確認カード：

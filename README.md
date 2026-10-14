@@ -64,6 +64,19 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 Or pick the asset by hand from the [latest release](https://github.com/DeveloperMatt02/DirectDrop/releases/latest).
 
+## GUI + headless daemon: pick one
+
+The GUI bundles (`.deb` / `.rpm` / `.AppImage`) embed their own receiver; the
+`quickshare-direct` daemon package is the same receiver headless. Running both
+at once advertises the laptop twice under the same device name and makes them
+fight over the per-user Wi-Fi helpers (`quickshare-ap@USER`,
+`quickshare-join@USER`), so `get-directdrop.sh` disables the daemon
+(`systemctl --user disable --now quickshare-direct`) whenever it installs a
+GUI bundle. The `.deb`/`.rpm` GUI also adds DirectDrop to the app menu (search
+"DirectDrop"); the `.AppImage` doesn't until integrated (Gear Lever,
+appimaged, or a manual `.desktop` file). To go back to headless: quit the GUI
+and run `systemctl --user enable --now quickshare-direct`.
+
 ## 🖥️ Screenshots
 
 Main window (operate-mode console: status header, live laptop ⇄ phone flow, send pane, device board, transfer queue):
