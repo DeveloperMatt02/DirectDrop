@@ -52,12 +52,12 @@ Commandes directes par distribution (même source, sans script auxiliaire) :
 ```bash
 # Fedora / RHEL (.rpm)
 URL=$(curl -fsSL https://api.github.com/repos/DeveloperMatt02/DirectDrop/releases/latest \
-  | grep -o 'https://[^"]*\.rpm' | head -n 1)
+  | grep -o 'https://[^"]*\.rpm' | grep x86_64 | head -n 1)  # x86_64 (aarch64 on ARM)
 sudo dnf install -y "$URL"
 
 # Debian / Ubuntu (.deb)
 URL=$(curl -fsSL https://api.github.com/repos/DeveloperMatt02/DirectDrop/releases/latest \
-  | grep -o 'https://[^"]*\.deb' | head -n 1)
+  | grep -o 'https://[^"]*\.deb' | grep amd64 | head -n 1)  # amd64 (arm64 on ARM)
 curl -fL -o /tmp/directdrop.deb "$URL"
 sudo apt-get install -y /tmp/directdrop.deb
 ```

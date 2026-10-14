@@ -1,11 +1,14 @@
 #!/bin/sh
-# get-directdrop.sh: install DirectDrop (desktop GUI) from GitHub Releases.
+# get-directdrop.sh: install DirectDrop from GitHub Releases.
 #
 #   curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash
 #
-# Detects the distribution and installs the matching bundle from the latest
-# DeveloperMatt02/DirectDrop release: .rpm via dnf/yum on Fedora/RHEL,
-# .deb via apt-get on Debian/Ubuntu, .AppImage into ~/.local/bin everywhere else.
+# Detects the distribution and CPU and installs the matching bundle from the
+# latest DeveloperMatt02/DirectDrop release: .rpm via dnf/yum on Fedora/RHEL,
+# .deb via apt-get on Debian/Ubuntu, .AppImage into ~/.local/bin everywhere
+# else. Prefers the DirectDrop GUI build; falls back to the quickshare-direct
+# daemon package (same project; shipped by the qsd-v* daemon releases until
+# a v*.*.* tag publishes the GUI bundles).
 set -eu
 
 REPO=DeveloperMatt02/DirectDrop
@@ -16,8 +19,9 @@ die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = Linux ] || die "Linux only"
 case $(uname -m) in
-  x86_64 | amd64) ;;
-  *) die "unsupported CPU architecture $(uname -m): this installer ships x86_64 builds" ;;
+  x86_64 | amd64) ARCH=x86_64 DEB_ARCH=amd64 ;;
+  aarch64 | arm64) ARCH=aarch64 DEB_ARCH=arm64 ;;
+  *) die "unsupported CPU architecture $(uname -m) (this installer ships x86_64 and aarch64 builds)" ;;
 esac
 
 if [ "$(id -u)" -eq 0 ]; then
@@ -45,8 +49,17 @@ say "looking up the latest $REPO release"
 fetch "https://api.github.com/repos/$REPO/releases/latest" "$TMP/release.json" \
   || die "couldn't reach the GitHub API (offline or rate-limited?)"
 
-asset_url() { # extension
-  grep '"browser_download_url"' "$TMP/release.json" | grep "\.$1\"" | head -n 1 | cut -d '"' -f 4 || true
+# Pick a bundle URL from the release JSON ($TMP/release.json): prefer the
+# DirectDrop GUI build for this format+CPU, fall back to any (daemon) package
+# for the same format+CPU. Always prints (possibly empty), never fails.
+asset_url() { # ext arch-ere
+  for product in DirectDrop ''; do
+    if [ -n "$product" ]; then filt() { grep "$product"; }; else filt() { cat; }; fi
+    url=$(grep '"browser_download_url"' "$TMP/release.json" | filt \
+      | grep "\.$1\"" | grep -E "$2" | head -n 1 | cut -d '"' -f 4 || true)
+    if [ -n "$url" ]; then printf '%s' "$url"; return 0; fi
+  done
+  return 0
 }
 
 FORMAT=
@@ -60,8 +73,8 @@ esac
 
 case $FORMAT in
   rpm)
-    URL=$(asset_url rpm)
-    [ -n "$URL" ] || die "no .rpm in the latest $REPO release"
+    URL=$(asset_url rpm "$ARCH")
+    [ -n "$URL" ] || die "no .rpm for $ARCH in the latest $REPO release"
     FILE=$TMP/$(basename "$URL")
     say "downloading $(basename "$URL")"
     fetch "$URL" "$FILE"
@@ -70,8 +83,8 @@ case $FORMAT in
     else $SUDO yum install -y "$FILE"; fi
     ;;
   deb)
-    URL=$(asset_url deb)
-    [ -n "$URL" ] || die "no .deb in the latest $REPO release"
+    URL=$(asset_url deb "$DEB_ARCH")
+    [ -n "$URL" ] || die "no .deb for $DEB_ARCH in the latest $REPO release"
     FILE=$TMP/$(basename "$URL")
     say "downloading $(basename "$URL")"
     fetch "$URL" "$FILE"
@@ -81,8 +94,8 @@ case $FORMAT in
     $SUDO apt-get install -y "$FILE"
     ;;
   appimage)
-    URL=$(asset_url AppImage)
-    [ -n "$URL" ] || die "no .AppImage in the latest $REPO release"
+    URL=$(asset_url AppImage "$DEB_ARCH|$ARCH")
+    [ -n "$URL" ] || die "no .AppImage for $ARCH in the latest $REPO release"
     DEST="$HOME/.local/bin/$APP"
     mkdir -p "$HOME/.local/bin"
     say "installing $(basename "$URL") to $DEST"
@@ -95,4 +108,14 @@ case $FORMAT in
     ;;
 esac
 
-say "done. Launch '$APP' (or DirectDrop from the app menu)."
+case $(basename "$URL") in
+  DirectDrop*) WHAT=gui ;;
+  *) WHAT=daemon ;;
+esac
+
+if [ "$WHAT" = gui ]; then
+  say "done. Launch '$APP' (or DirectDrop from the app menu)."
+else
+  say "done (this release ships the daemon; GUI bundles come with a v*.*.* tag)."
+  say "Receive: pick '$(uname -n)' in Quick Share on the phone. Send: 'quickshare-direct send FILE'."
+fi
