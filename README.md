@@ -1,8 +1,41 @@
-# quickshare-direct — with Desktop GUI (fork)
+<div align="center">
+  <img src="https://img.shields.io/badge/English-EN-blue?style=flat-square" alt="English" />
+  <a href="README.it.md"><img src="https://img.shields.io/badge/Italiano-IT-555?style=flat-square" alt="Italiano" /></a>
+  <a href="README.es.md"><img src="https://img.shields.io/badge/Español-ES-555?style=flat-square" alt="Español" /></a>
+  <a href="README.fr.md"><img src="https://img.shields.io/badge/Français-FR-555?style=flat-square" alt="Français" /></a>
+  <a href="README.de.md"><img src="https://img.shields.io/badge/Deutsch-DE-555?style=flat-square" alt="Deutsch" /></a>
+  <a href="README.pt.md"><img src="https://img.shields.io/badge/Português-PT-555?style=flat-square" alt="Português" /></a>
+  <a href="README.ru.md"><img src="https://img.shields.io/badge/Русский-RU-555?style=flat-square" alt="Русский" /></a>
+  <a href="README.zh.md"><img src="https://img.shields.io/badge/中文-ZH-555?style=flat-square" alt="中文" /></a>
+  <a href="README.ja.md"><img src="https://img.shields.io/badge/日本語-JA-555?style=flat-square" alt="日本語" /></a>
+</div>
 
-**Quick Share (Nearby Share) for Linux that doesn't need both devices on the same Wi-Fi — now with a reactivated desktop GUI.**
+<div align="center">
+  <img src="app/main/src-tauri/icons/128x128.png" width="128" alt="DirectDrop icon" />
+  <h1>DirectDrop</h1>
+  <p><strong>Quick Share (Nearby Share) for Linux that doesn't need both devices on the same Wi-Fi — now with a desktop GUI.</strong></p>
 
-This is a fork of upstream `quickshare-direct`. All of the upstream headless receiver / sender stack is preserved unchanged (BLE advertisement/GATT first contact, Wi-Fi Direct GO/client upgrade, LAN fallback, polkit helpers, headless CLI daemon). What this fork adds is a redesigned Tauri desktop GUI in `app/main/` with full behavioral parity to the CLI.
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/github/v/release/DeveloperMatt02/DirectDrop?style=flat-square" alt="latest release" /></a>
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/github/stars/DeveloperMatt02/DirectDrop?style=flat-square" alt="stars" /></a>
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/github/downloads/DeveloperMatt02/DirectDrop/total?style=flat-square" alt="downloads" /></a>
+  <img src="https://img.shields.io/badge/License-GPLv3-blue?style=flat-square" alt="license GPL-3.0" />
+  <img src="https://img.shields.io/badge/platform-Linux-blue?style=flat-square" alt="platform Linux" />
+  <img src="https://img.shields.io/badge/Tauri-2.2-24C8DB?style=flat-square&logo=tauri" alt="Tauri 2.2" />
+  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vue.js" alt="Vue 3.5" />
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/actions/workflows/release.yml"><img src="https://github.com/DeveloperMatt02/DirectDrop/actions/workflows/release.yml/badge.svg" alt="release CI" /></a>
+
+  <br />
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/github/stars/DeveloperMatt02/DirectDrop?style=social" alt="star this repo" /></a>
+
+  <br /><br />
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
+  <a href="#quick-install-terminal"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
+  <a href="#screenshots"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
+  <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
+</div>
+
+> A fork of upstream `quickshare-direct`. The headless receiver / sender stack is preserved unchanged (BLE advertisement/GATT first contact, Wi-Fi Direct GO/client upgrade, LAN fallback, polkit helpers, headless CLI daemon). What this fork adds is a redesigned Tauri desktop GUI in `app/main/` with full behavioral parity to the CLI.
 
 ## Quick Install (Terminal)
 
@@ -30,6 +63,19 @@ sudo apt-get install -y /tmp/directdrop.deb
 ```
 
 Or pick the asset by hand from the [latest release](https://github.com/DeveloperMatt02/DirectDrop/releases/latest).
+
+## 🖥️ Screenshots
+
+Main window (operate-mode console: status header, live laptop ⇄ phone flow, send pane, device board, transfer queue):
+
+![DirectDrop main window](docs/screenshots/gui-main.svg)
+
+Incoming transfer — UKEY2 PIN verification card with 60s countdown and auto-decline:
+
+![DirectDrop consent card](docs/screenshots/gui-consent.svg)
+
+> [!NOTE]
+> These are schematic placeholders in the app's blueprint style. Replace `docs/screenshots/gui-main.svg` and `docs/screenshots/gui-consent.svg` with real captures (`pnpm tauri dev`, screenshot the window, save as `.png` next to them and update the links above).
 
 Upstream quick-start still applies:
 
@@ -229,8 +275,7 @@ Receiver file: `~/.config/quickshare-direct/env` (`QSD_NAME`, `QSD_DIR`, ...). H
 [docs/DEV_NOTES.md](docs/DEV_NOTES.md) (findings, phone logs, protocol details) and
 [docs/BLE_RECEIVER_DISCOVERY.md](docs/BLE_RECEIVER_DISCOVERY.md) (the BLE receiver path).
 
-Releases: CI (`.github/workflows/packages.yml`) builds and install-tests the packages on every
-push; bumping `VERSION` on `main` publishes the release `qsd-v<VERSION>`.
+Releases (this fork): pushing a `v*.*.*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the Tauri GUI bundles (`.deb`, `.rpm`, `.AppImage`) and the `directdrop-cli-linux-x86_64.tar.gz` daemon tarball and publishes them to the GitHub Release — installable via `get-directdrop.sh` above. Upstream daemon packages keep their own flow: CI (`.github/workflows/packages.yml`) builds and install-tests the packages on every push; bumping `VERSION` on `main` publishes the release `qsd-v<VERSION>`.
 
 Repository layout: `core_lib` (library + the `quickshare-direct` binary) and `packaging/`; that's
 all the packages, the NixOS module and CI build. `app/main/` is this fork's reactivated desktop
@@ -241,3 +286,19 @@ GUI (Tauri + Vue): it wraps `core_lib` in-process via `src-tauri/src/dto.rs` + `
 Development (headless): `nix develop`, then in `core_lib`: `cargo run --bin quickshare-direct`
 (env: `QSD_DIR`, `QSD_NAME`, `QSD_PORT`, `QSD_BWU_PORT`, `QSD_BWU=lan|hotspot`, `RUST_LOG`).
 Development (GUI): see "Running the GUI from source" above.
+
+---
+
+<div align="center">
+
+## ⭐ Show your support
+
+If DirectDrop gets your files to your phone without touching the router, give it a star — it helps a lot.
+
+<a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/github/stars/DeveloperMatt02/DirectDrop?style=social" alt="star this repo" /></a>
+
+<a href="https://star-history.com/#DeveloperMatt02/DirectDrop&Date"><img src="https://api.star-history.com/svg?repos=DeveloperMatt02/DirectDrop&type=Date" width="600" alt="star history chart" /></a>
+
+Found a bug? [Open an issue](https://github.com/DeveloperMatt02/DirectDrop/issues/new) — pull requests welcome.
+
+</div>

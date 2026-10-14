@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480" font-family="monospace">
+  <defs>
+    <pattern id="dots2" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#1e293b"/>
+    </pattern>
+  </defs>
+  <rect x="0" y="0" width="640" height="480" fill="#020617"/>
+  <rect x="0" y="0" width="640" height="480" fill="url(#dots2)"/>
+  <rect x="8" y="8" width="624" height="464" fill="none" stroke="#1e293b" stroke-width="1"/>
+  <!-- consent card -->
+  <rect x="70" y="40" width="500" height="400" fill="#0b1220" stroke="#f59e0b" stroke-width="1"/>
+  <text x="100" y="76" fill="#64748b" font-size="12">INCOMING :: WaitingForUserConsent</text>
+  <text x="100" y="108" fill="#e2e8f0" font-size="20">PIXEL 10 · PHONE</text>
+  <text x="100" y="132" fill="#64748b" font-size="13">wants to share 2 files (36.4 MB)</text>
+  <!-- countdown ring -->
+  <circle cx="160" cy="220" r="52" fill="none" stroke="#334155" stroke-width="6"/>
+  <circle cx="160" cy="220" r="52" fill="none" stroke="#f59e0b" stroke-width="6" stroke-dasharray="245 327" transform="rotate(-90 160 220)"/>
+  <text x="138" y="214" fill="#fbbf24" font-size="22">0:47</text>
+  <text x="132" y="236" fill="#64748b" font-size="11">auto-decline</text>
+  <!-- PIN -->
+  <text x="260" y="180" fill="#64748b" font-size="12">VERIFY ON BOTH SIDES</text>
+  <text x="252" y="232" fill="#e2e8f0" font-size="52" letter-spacing="10">4821</text>
+  <text x="260" y="262" fill="#64748b" font-size="12">IMG_001.jpg, video.mp4</text>
+  <!-- actions -->
+  <rect x="100" y="310" width="220" height="56" fill="none" stroke="#38bdf8" stroke-width="1"/>
+  <text x="165" y="345" fill="#38bdf8" font-size="16">[ ACCEPT ]</text>
+  <rect x="336" y="310" width="204" height="56" fill="none" stroke="#475569" stroke-width="1"/>
+  <text x="390" y="345" fill="#94a3b8" font-size="16">[ DECLINE ]</text>
+  <text x="100" y="402" fill="#475569" font-size="12">text / url payloads render inline — no disk write</text>
+  <text x="330" y="458" fill="#f59e0b" font-size="12">SCHEMATIC — replace with real capture</text>
+</svg>

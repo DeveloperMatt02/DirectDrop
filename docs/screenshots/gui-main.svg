@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" font-family="monospace">
+  <defs>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#1e293b"/>
+    </pattern>
+  </defs>
+  <rect x="0" y="0" width="960" height="600" fill="#020617"/>
+  <rect x="0" y="0" width="960" height="600" fill="url(#dots)"/>
+  <rect x="8" y="8" width="944" height="584" fill="none" stroke="#1e293b" stroke-width="1"/>
+  <!-- header -->
+  <rect x="32" y="28" width="896" height="52" fill="none" stroke="#334155" stroke-width="1"/>
+  <circle cx="56" cy="54" r="5" fill="#475569"/>
+  <circle cx="74" cy="54" r="5" fill="#475569"/>
+  <circle cx="92" cy="54" r="5" fill="#475569"/>
+  <text x="116" y="60" fill="#e2e8f0" font-size="18" letter-spacing="2">DIRECTDROP</text>
+  <rect x="640" y="40" width="90" height="28" fill="none" stroke="#38bdf8" stroke-width="1"/>
+  <text x="656" y="59" fill="#38bdf8" font-size="13">Visible</text>
+  <rect x="738" y="40" width="110" height="28" fill="none" stroke="#475569" stroke-width="1"/>
+  <text x="748" y="59" fill="#64748b" font-size="13">Temporarily</text>
+  <rect x="856" y="40" width="52" height="28" fill="none" stroke="#475569" stroke-width="1"/>
+  <text x="864" y="59" fill="#64748b" font-size="13">HH:MM</text>
+  <!-- flow -->
+  <rect x="32" y="96" width="896" height="120" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="52" y="122" fill="#64748b" font-size="12">FLOW-DIAGRAM :: live network flow</text>
+  <rect x="120" y="140" width="180" height="56" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="170" y="165" fill="#e2e8f0" font-size="14">LAPTOP</text>
+  <text x="165" y="185" fill="#64748b" font-size="12">this device</text>
+  <text x="330" y="172" fill="#38bdf8" font-size="20">BLE ⇄ Wi-Fi ⇄</text>
+  <rect x="660" y="140" width="180" height="56" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="715" y="165" fill="#e2e8f0" font-size="14">PHONE</text>
+  <text x="700" y="185" fill="#64748b" font-size="12">Pixel · nearby</text>
+  <!-- panes -->
+  <rect x="32" y="232" width="300" height="200" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="52" y="258" fill="#64748b" font-size="12">SEND-PANE :: stage files</text>
+  <rect x="52" y="272" width="260" height="60" fill="none" stroke="#475569" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="72" y="298" fill="#94a3b8" font-size="13">drop files here / browse</text>
+  <text x="72" y="318" fill="#475569" font-size="12">regular files only</text>
+  <rect x="52" y="348" width="260" height="64" fill="none" stroke="#475569" stroke-width="1"/>
+  <text x="72" y="374" fill="#94a3b8" font-size="13">[ SEND ] → endpoint</text>
+  <text x="72" y="394" fill="#475569" font-size="12">qsd_send_lan · ip:port</text>
+  <rect x="348" y="232" width="580" height="200" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="368" y="258" fill="#64748b" font-size="12">DEVICE-BOARD :: mDNS endpoints</text>
+  <rect x="368" y="272" width="540" height="52" fill="none" stroke="#38bdf8" stroke-width="1"/>
+  <text x="388" y="295" fill="#e2e8f0" font-size="14">● Pixel 10 — phone</text>
+  <text x="388" y="313" fill="#64748b" font-size="12">192.168.x.x:port · present</text>
+  <rect x="368" y="336" width="540" height="52" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="388" y="359" fill="#64748b" font-size="14">○ (no more devices nearby)</text>
+  <text x="388" y="377" fill="#475569" font-size="12">discovery running…</text>
+  <!-- queue -->
+  <rect x="32" y="448" width="896" height="96" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="52" y="474" fill="#64748b" font-size="12">TRANSFER-QUEUE :: consent / progress</text>
+  <rect x="52" y="486" width="420" height="40" fill="none" stroke="#f59e0b" stroke-width="1"/>
+  <text x="68" y="511" fill="#fbbf24" font-size="13">◷ RX consent · PIN 4821 · 0:47 left</text>
+  <rect x="488" y="486" width="420" height="40" fill="none" stroke="#334155" stroke-width="1"/>
+  <text x="504" y="511" fill="#64748b" font-size="13">▓▓▓▓▓▓▓░░░ TX video.mp4 · 68%</text>
+  <!-- footer -->
+  <text x="32" y="572" fill="#475569" font-size="12">~/Downloads ········ :port · dto v1 · core untouched</text>
+  <text x="660" y="572" fill="#f59e0b" font-size="12">SCHEMATIC — replace with real capture</text>
+</svg>
