@@ -9,11 +9,11 @@ use crate::store;
 #[tauri::command]
 pub fn qsd_set_download_path(
     app: AppHandle,
-    p: Option<String>,
+    path: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), GuiError> {
-    info!("qsd_set_download_path: {p:?}");
-    let path = p.map(PathBuf::from);
+    info!("qsd_set_download_path: {path:?}");
+    let path = path.map(PathBuf::from);
     state
         .rqs
         .lock()

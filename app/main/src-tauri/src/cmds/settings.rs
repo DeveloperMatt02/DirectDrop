@@ -38,10 +38,10 @@ pub async fn qsd_snapshot(
 #[tauri::command]
 pub fn qsd_set_device_name(
     app: AppHandle,
-    n: String,
+    name: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), GuiError> {
-    let name = n.trim().to_string();
+    let name = name.trim().to_string();
     if name.is_empty() || name.len() > 255 {
         return Err(GuiError::validation(
             "device name must be 1-255 characters",
