@@ -103,6 +103,27 @@ export interface BleReceiverDto {
 	endpoint_id: string;
 }
 
+/** Input qsd_scan_ble (one-shot; timeout_s 3–30, default 30, settle fisso 3s). */
+export interface ScanBleInput {
+	name?: string | null;
+	timeout_s?: number | null;
+}
+
+/** Input qsd_send_ble (receiver_id = token opaco `endpoint_hex-address`). */
+export interface SendBleInput {
+	receiver_id: string;
+	files: string[];
+	send_id?: string | null;
+}
+
+/**
+ * Port of CLI receiver_label() (quickshare-direct.rs): nome o
+ * `unnamed device <endpoint_id>` (qui l'id è già hex dal backend).
+ */
+export function bleReceiverLabel(r: Pick<BleReceiverDto, 'name' | 'endpoint_id'>): string {
+	return r.name ?? `unnamed device ${r.endpoint_id}`;
+}
+
 export interface SnapshotDto {
 	dto_version: number;
 	visibility: VisibilityDto;

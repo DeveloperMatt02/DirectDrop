@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import {
 	QSD_CONSENT_TIMEOUT_MS,
 	type ConsentDto,
+	type SendBleInput,
 	type SendPayloadDto,
 	type TransferActionDto,
 	type TransferDto,
@@ -87,6 +88,16 @@ export const useTransfersStore = defineStore('transfers', () => {
 	}
 
 	async function cancel(id: string) {
+		// BLE sends (`ble-`): qsd_cancel_send fa scattare il CancellationToken
+		// (fase pre-handshake) + invia TransferCancel (onorato da OutboundRequest).
+		if (id.startsWith('ble-')) {
+			try {
+				await invoke('qsd_cancel_send', { send_id: id });
+				return;
+			} catch {
+				// fallback al path consenso sotto
+			}
+		}
 		await consent(id, 'TransferCancel');
 	}
 
@@ -99,6 +110,11 @@ export const useTransfersStore = defineStore('transfers', () => {
 		await invoke('qsd_send_lan', { m: payload });
 	}
 
+	/** BLE send: ritorna il send_id (`ble-…`) per il tracking/cancel. */
+	async function sendBle(payload: SendBleInput): Promise<string> {
+		return await invoke<string>('qsd_send_ble', { m: payload });
+	}
+
 	const inbound = computed(() =>
 		[...items.value.values()].filter((t) => t.kind === 'Inbound'),
 	);
@@ -109,5 +125,5 @@ export const useTransfersStore = defineStore('transfers', () => {
 		[...inbound.value].sort((a, b) => (b.ui.consent_deadline ?? 0) - (a.ui.consent_deadline ?? 0)),
 	);
 
-	return { items, inbound, outbound, inboundSorted, upsert, consent, cancel, clear, sendLan };
+	return { items, inbound, outbound, inboundSorted, upsert, consent, cancel, clear, sendLan, sendBle };
 });
