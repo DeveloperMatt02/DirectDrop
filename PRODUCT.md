@@ -47,7 +47,9 @@ Undecided: final GUI packaging/install story (still opt-in, `.desktop` optional)
 
 ## Brand Commitments
 
-Name: `quickshare-direct` (binary + package names `qsd-v<VERSION>`; current `VERSION` = `0.1.5`). GUI crate is `rquickshare` (historical). Voice: factual README/CLI tone, no marketing claims. Upstream credit: fork of rQuickShare (Martichou, contributors; Bluetooth work nozwock/martinalderson); protocol reference Google Nearby (Apache-2.0). License: GPL-3.0. No logo, palette, or type commitments recorded — do not invent any.
+Name: `quickshare-direct` (binary + package names `qsd-v<VERSION>`; current `VERSION` = `0.1.5`). GUI product is `DirectDrop` (crate `directdrop`, was `rquickshare`; window title `DirectDrop`, identifier `dev.mandre.directdrop`). Voice: factual README/CLI tone, no marketing claims. Upstream credit: fork of rQuickShare (Martichou, contributors; Bluetooth work nozwock/martinalderson); protocol reference Google Nearby (Apache-2.0). License: GPL-3.0. No logo recorded — do not invent one.
+
+GUI visual system (opt-in desktop surface, `app/main/`): dark blueprint schematic. Near-black slate ground with dotted grid, 1px hairline panels, zero shadows; mono-first labels. One sky accent for link/selection/SEND plus one orange signal for consent urgency, semantic green/amber/red for state only. Live flow diagram (laptop ↔ phone with animated dashed link, particles while live), sketch-outline consent card with giant orange PIN and depleting ring, block-grid progress with live speed/bytes/ETA, dashed send dropzone, 1px device cards with LAN badges, arc scan radar. Motion is link telemetry with `prefers-reduced-motion` fallbacks (see DESIGN.md).
 
 ## Evidence on Hand
 
@@ -55,7 +57,7 @@ Name: `quickshare-direct` (binary + package names `qsd-v<VERSION>`; current `VER
 - `CLAUDE.md` (agent ops, layout, dev loop, Pixel 10 results 2026-10-05).
 - `docs/DEV_NOTES.md` (findings, phone logs, measurements, open plan), `docs/BLE_RECEIVER_DISCOVERY.md` (BLE/weave protocol).
 - `GUI_ARCHITECTURE.md` (GUI reactivation plan: DTO/bridge layer, `qsd://*` events, F0–F4 phases) + `REPO_SUMMARY.md` (branch/recon state).
-- Incumbent UI: `app/main/src/components/HomePage.vue` (379 lines), `app/main/src/composables/` (SideMenu, ContentStatus, SettingsModal, ItemSide, Heading), `app/main/src/vue_lib/` (invoke wrappers, stale `@martichou/core_lib` bindings), `app/main/src-tauri/src/main.rs` (currently non-compiling against core: 4-arg `RQS::new`, stale `State`/`ChannelDirection`/`ChannelMessage` shape).
+- GUI console (this branch): `app/main/src/App.vue` shell with `components/` (StatusHeader, SendPane, DeviceRow, TransferQueue, TransferCard, ConsentCard, ProgressBar) + `composables/SettingsDrawer.vue`, replacing the legacy rQuickShare layout (deleted: HomePage, SideMenu, ItemSide, Heading, ContentStatus, SettingsModal). Untouched boundary: `stores/`, `types/qsd.ts`, `src-tauri/`.
 - CLI reference: `core_lib/src/bin/quickshare-direct.rs` (587 lines); test harness `tools/dev/qs-*.sh`.
 - Absences future work must not fabricate: no testimonials, benchmarks beyond the measured ~35 MB/s lab numbers, pricing, or shipped GUI screenshots.
 

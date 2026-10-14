@@ -16,3 +16,6 @@ const app = createApp(App)
 app.use(pinia);
 
 app.mount('#app')
+
+// No native context menu (incl. "Inspect element") in any build.
+window.addEventListener('contextmenu', (e) => e.preventDefault());

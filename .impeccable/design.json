@@ -1,0 +1,296 @@
+{
+  "components": [
+    {
+      "css": ".ds-btn-primary { background: #6ea8fe; color: #0b1220; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px; font-size: 13px; font-weight: 500; line-height: 1.4; cursor: pointer; transition: filter 150ms ease-out; } .ds-btn-primary:hover { filter: brightness(0.92); } .ds-btn-primary:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }",
+      "description": "Accept, Send, and other committing actions. One accent, nowhere else.",
+      "html": "<button class=\"ds-btn-primary\">Accept</button>",
+      "kind": "button",
+      "name": "Primary Button",
+      "refersTo": "button-primary"
+    },
+    {
+      "css": ".ds-btn-ghost { background: #262a33; color: #e8eaf0; padding: 8px 16px; border: 1px solid #2e333d; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: filter 150ms ease-out; } .ds-btn-ghost:hover { filter: brightness(1.08); } .ds-btn-ghost:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 2px; }",
+      "description": "Decline, Cancel, Clear, settings rows. Destructive stays ghost until focused.",
+      "html": "<button class=\"ds-btn-ghost\">Decline</button>",
+      "kind": "button",
+      "name": "Ghost Button",
+      "refersTo": "button-ghost"
+    },
+    {
+      "css": ".ds-device-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: #1e2128; border: 1px solid #2e333d; border-radius: 10px; padding: 12px; cursor: pointer; color: #e8eaf0; font-family: system-ui, sans-serif; } .ds-device-row:hover { background: #262a33; } .ds-device-row:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 2px; } .ds-device-row .ds-name { font-size: 14px; font-weight: 600; } .ds-device-row .ds-addr { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #a7adba; font-variant-numeric: tabular-nums; }",
+      "description": "Nearby-device row: name plus mono ip:port. Tapping sends staged files.",
+      "html": "<button class=\"ds-device-row\"><svg width=\"20\" height=\"20\" viewBox=\"0 -960 960 960\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M280-40q-33 0-56.5-23.5T200-120v-720q0-33 23.5-56.5T280-920h400q33 0 56.5 23.5T760-840v720q0 33-23.5 56.5T680-40H280Z\"/></svg><span><span class=\"ds-name\">Pixel 10</span><br/><span class=\"ds-addr\">192.168.1.5:46257</span></span></button>",
+      "kind": "custom",
+      "name": "Device Row",
+      "refersTo": "device-row"
+    },
+    {
+      "css": ".ds-consent { background: #1e2128; border: 1px solid #2e333d; border-top: 2px solid #6ea8fe; border-radius: 10px; padding: 12px; color: #e8eaf0; font-family: system-ui, sans-serif; max-width: 420px; } .ds-consent .ds-cap { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #a7adba; } .ds-consent .ds-pin { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }",
+      "description": "In-flow consent card: 32px mono PIN, countdown bar, Accept/Decline. Pins atop the queue, never a modal.",
+      "html": "<div class=\"ds-consent\"><div class=\"ds-cap\">Confirm PIN to receive</div><div class=\"ds-pin\">4821</div><div>Pixel 10 \u00b7 2 files (36.4 MB) \u00b7 47s left</div></div>",
+      "kind": "card",
+      "name": "Consent Card",
+      "refersTo": "consent-pin"
+    },
+    {
+      "css": ".ds-progress { width: 100%; height: 4px; border-radius: 2px; background: #2e333d; overflow: hidden; } .ds-progress > span { display: block; height: 100%; width: 62%; background: #6ea8fe; }",
+      "description": "Thin 4px linear transfer progress. No rings standing in for content.",
+      "html": "<div class=\"ds-progress\" role=\"progressbar\" aria-valuenow=\"62\" aria-valuemin=\"0\" aria-valuemax=\"100\"><span></span></div>",
+      "kind": "custom",
+      "name": "Progress Bar",
+      "refersTo": "progress-bar"
+    },
+    {
+      "css": ".ds-input { background: #262a33; border: 1px solid #2e333d; border-radius: 6px; color: #e8eaf0; font-size: 13px; padding: 8px 12px; width: 100%; font-family: system-ui, sans-serif; } .ds-input:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 1px; }",
+      "description": "Device-name and path fields. 2px accent focus, danger text plus hint on error.",
+      "html": "<input class=\"ds-input\" value=\"laptop\" aria-label=\"Device name\"/>",
+      "kind": "input",
+      "name": "Text Input",
+      "refersTo": "input-field"
+    }
+  ],
+  "extensions": {
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "1024px"
+      }
+    ],
+    "colorMeta": {
+      "accent": {
+        "canonical": "#38bdf8",
+        "displayName": "Link Sky",
+        "role": "primary",
+        "tonalRamp": [
+          "#0e2547",
+          "#16407c",
+          "#1e56a8",
+          "#2f6fd0",
+          "#6ea8fe",
+          "#9dc2fe",
+          "#c4d9ff",
+          "#e8f0ff"
+        ]
+      },
+      "danger": {
+        "canonical": "#f87171",
+        "displayName": "Signal Red",
+        "role": "semantic",
+        "tonalRamp": [
+          "#4d1210",
+          "#7a1f1a",
+          "#a8322a",
+          "#d1443b",
+          "#f85149",
+          "#fa7f78",
+          "#fcb3ae",
+          "#fee0dd"
+        ]
+      },
+      "ground": {
+        "canonical": "#020617",
+        "displayName": "Ground Graphite",
+        "role": "neutral",
+        "tonalRamp": [
+          "#0b0c0f",
+          "#16181d",
+          "#1e2128",
+          "#262a33",
+          "#333945",
+          "#4a5160",
+          "#6b7280",
+          "#a7adba"
+        ]
+      },
+      "ink": {
+        "canonical": "#e2e8f0",
+        "displayName": "Primary Ink",
+        "role": "neutral",
+        "tonalRamp": [
+          "#1a1d23",
+          "#333945",
+          "#4a5160",
+          "#6b7280",
+          "#a7adba",
+          "#c6cbd6",
+          "#e8eaf0",
+          "#f6f7fa"
+        ]
+      },
+      "ink-dim": {
+        "canonical": "#94a3b8",
+        "displayName": "Dim Ink",
+        "role": "neutral",
+        "tonalRamp": [
+          "#333945",
+          "#4a5160",
+          "#5b6270",
+          "#6b7280",
+          "#8b93a5",
+          "#a7adba",
+          "#c6cbd6",
+          "#e8eaf0"
+        ]
+      },
+      "line": {
+        "canonical": "#1e293b",
+        "displayName": "Hairline Seam",
+        "role": "neutral",
+        "tonalRamp": [
+          "#16181d",
+          "#1e2128",
+          "#262a33",
+          "#2e333d",
+          "#3d434e",
+          "#4a5160",
+          "#6b7280",
+          "#a7adba"
+        ]
+      },
+      "ok": {
+        "canonical": "#34d399",
+        "displayName": "Signal Green",
+        "role": "semantic",
+        "tonalRamp": [
+          "#0d3313",
+          "#14532d",
+          "#1c7a3f",
+          "#2da35c",
+          "#3fb950",
+          "#6fd584",
+          "#a9e8b8",
+          "#dcf5e2"
+        ]
+      },
+      "panel": {
+        "canonical": "#0f172a",
+        "displayName": "Panel Slate",
+        "role": "neutral",
+        "tonalRamp": [
+          "#0b0c0f",
+          "#16181d",
+          "#1e2128",
+          "#262a33",
+          "#333945",
+          "#4a5160",
+          "#6b7280",
+          "#a7adba"
+        ]
+      },
+      "warn": {
+        "canonical": "#fbbf24",
+        "displayName": "Signal Amber",
+        "role": "semantic",
+        "tonalRamp": [
+          "#3d2a06",
+          "#6b4a0c",
+          "#96690f",
+          "#b9851c",
+          "#d29922",
+          "#ddb04c",
+          "#e9cb85",
+          "#f6e8c2"
+        ]
+      },
+      "signal": {
+        "role": "signal",
+        "displayName": "Consent Orange",
+        "canonical": "#fb923c",
+        "tonalRamp": [
+          "#431407",
+          "#7c2d12",
+          "#c2410c",
+          "#ea580c",
+          "#fb923c",
+          "#fdba74",
+          "#fed7aa",
+          "#ffedd5"
+        ]
+      }
+    },
+    "motion": [
+      {
+        "name": "state-shift",
+        "purpose": "State change only (hover, progress, countdown). No entrance choreography.",
+        "value": "150ms ease-out"
+      },
+      {
+        "name": "progress-fill",
+        "purpose": "Linear progress and countdown bar depletion.",
+        "value": "200ms linear"
+      }
+    ],
+    "shadows": [],
+    "typographyMeta": {
+      "body": {
+        "displayName": "Body",
+        "purpose": "File names, descriptions, settings rows. 13px/1.5."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table/section captions. 11px uppercase, functional headers only."
+      },
+      "mono": {
+        "displayName": "Mono Data",
+        "purpose": "PINs, byte counts, speeds, countdowns, addresses. Tabular figures."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel headers, device names, queue heads. 15px semibold."
+      }
+    }
+  },
+  "generatedAt": "2026-10-14T02:55:00Z",
+  "narrative": {
+    "dos": [
+      "Do set every PIN, byte count, speed, and countdown in tabular mono (tnum), verified against the phone screen at a glance.",
+      "Do keep consent in flow atop the queue with countdown and expiry parity (60s auto-decline).",
+      "Do theme selection, caret, focus rings, scrollbars, and numerals from this palette.",
+      "Do isolate destructive actions with empty space and focus-gating."
+    ],
+    "donts": [
+      "Don't ship gradient text, glassmorphism, colored left-bars, hard offset shadows, or eyebrow kickers.",
+      "Don't use icon-plus-heading-plus-text cards as page structure or nested cards anywhere.",
+      "Don't put product UI in a display face or use mono for labels and decoration.",
+      "Don't modal what a drawer or inline row can do; settings and errors stay in flow.",
+      "Don't invent benchmarks, testimonials, or screenshots beyond the measured ~35 MB/s lab numbers."
+    ],
+    "keyCharacteristics": [
+      "Dark-first adaptive console (light follows system, same seams and density).",
+      "High-density rows over cards; tables and queues, not icon grids.",
+      "Tabular mono for every number that must be compared or confirmed.",
+      "One accent; state colors earn their pixels."
+    ],
+    "northStar": "The Bench Instrument",
+    "overview": "A dark blueprint schematic of the transfer itself: laptop left, phone right, a dashed animated link that goes live only when bytes move. Dotted-grid ground, 1px hairline panels, zero shadows, mono-first labels. Motion is the link telemetry, never decoration.",
+    "rules": [
+      {
+        "body": "Depth is a 1px seam (#2e333d) or one tonal step up. No drop shadows, no glows, no blur-as-decoration.",
+        "name": "The Seam-Not-Shadow Rule",
+        "section": "elevation"
+      },
+      {
+        "body": "Blue means actionable-or-selected. Success, warning, and danger never borrow it and never decorate inactive states.",
+        "name": "The One-Accent Rule",
+        "section": "colors"
+      },
+      {
+        "body": "Any two numbers the user compares (PIN to phone screen, ack/total, countdown) share the mono face and tabular figures.",
+        "name": "The Numbers-Agree Rule",
+        "section": "typography"
+      },
+      {
+        "body": "Mono is for code, data, and measurement only \u2014 never for labels or decoration.",
+        "name": "The No-Costume Rule",
+        "section": "typography"
+      },
+      {
+        "body": "Surfaces are flat at rest. Shadow appears only when a layer leaves its container (drawer, toast, dropdown).",
+        "name": "The Flat-By-Default Rule",
+        "section": "elevation"
+      }
+    ]
+  },
+  "schemaVersion": 2,
+  "title": "Design System: DirectDrop GUI"
+}

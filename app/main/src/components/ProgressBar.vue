@@ -14,8 +14,9 @@ const pct = computed(() => {
 
 <template>
 	<div
-		class="w-full h-2 rounded-full bg-gray-200 overflow-hidden" role="progressbar"
+		class="w-full h-1 rounded-full overflow-hidden" role="progressbar"
+		:style="{ background: 'var(--qsd-seam)' }"
 		:aria-valuenow="Math.round(pct)" aria-valuemin="0" aria-valuemax="100">
-		<div class="h-full bg-green-600 transition-all duration-300" :style="{ width: `${pct}%` }" />
+		<div class="h-full transition-all duration-200" :style="{ width: `${pct}%`, background: 'var(--qsd-accent)' }" />
 	</div>
 </template>

@@ -991,6 +991,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "directdrop"
+version = "0.11.5"
+dependencies = [
+ "anyhow",
+ "fern",
+ "humantime",
+ "log",
+ "notify-rust",
+ "rqs_lib",
+ "serde",
+ "serde_json",
+ "sys_metrics 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "time",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "directories"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4126,34 +4154,6 @@ dependencies = [
  "tokio-util",
  "tracing-subscriber",
  "uuid",
-]
-
-[[package]]
-name = "rquickshare"
-version = "0.11.5"
-dependencies = [
- "anyhow",
- "fern",
- "humantime",
- "log",
- "notify-rust",
- "rqs_lib",
- "serde",
- "serde_json",
- "sys_metrics 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "time",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]

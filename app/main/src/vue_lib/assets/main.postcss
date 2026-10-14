@@ -1,222 +1,249 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@100;300;400;500;600;700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@layer utilities {
-    /* Chrome, Safari and Opera */
-    .no-scrollbar::-webkit-scrollbar {
-        display: none;
-    }
-    .no-scrollbar {
-        -ms-overflow-style: none;
-        /* IE and Edge */
-        scrollbar-width: none;
-        /* Firefox */
-    }
+
+:root {
+	color-scheme: light dark;
+	--qsd-ground: #16181d;
+	--qsd-panel: #1e2128;
+	--qsd-raise: #262a33;
+	--qsd-ink: #e8eaf0;
+	--qsd-dim: #a7adba;
+	--qsd-seam: #2e333d;
+	--qsd-accent: #6ea8fe;
+	--qsd-accent-ink: #0b1220;
+	--qsd-ok: #3fb950;
+	--qsd-warn: #d29922;
+	--qsd-danger: #f85149;
+	--qsd-radius-s: 6px;
+	--qsd-radius-m: 10px;
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--qsd-ground: #f4f5f7;
+		--qsd-panel: #ffffff;
+		--qsd-raise: #eceef3;
+		--qsd-ink: #1a1d23;
+		--qsd-dim: #5b6270;
+		--qsd-seam: #e0e3ea;
+		--qsd-accent: #0b5bd3;
+		--qsd-accent-ink: #ffffff;
+	}
 }
 
 html,
 body,
 #app {
-    font-family: 'Montserrat', sans-serif;
-	outline: 1px solid transparent;
-	-webkit-backface-visibility: hidden;
-	transform: translateZ(0);
-	will-change: transform;
-	-webkit-perspective: 1000;
+	font-family: system-ui, -apple-system, 'Segoe UI', Ubuntu, Cantarell, sans-serif;
+	background: var(--qsd-ground);
+	color: var(--qsd-ink);
 }
 
-.status-indicator {
-    position: relative;
-    display: inline-block;
-    width: 48px;
-    height: 48px
+::selection {
+	background: var(--qsd-accent);
+	color: var(--qsd-accent-ink);
 }
 
-.status-indicator .circle {
-    position: absolute;
-    top: 18px;
-    left: 18px;
-    width: 12px;
-    height: 12px;
-    border-radius: 100px
+:focus-visible {
+	outline: 2px solid var(--qsd-accent);
+	outline-offset: 2px;
 }
 
-.status-indicator--xl {
-    width: 72px;
-    height: 72px
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--qsd-seam) transparent;
+}
+*::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--qsd-seam);
+	border-radius: 4px;
 }
 
-.status-indicator--xl .circle {
-    position: absolute;
-    top: 27px;
-    left: 27px;
-    width: 18px;
-    height: 18px;
-    border-radius: 100px
+.qsd-mono {
+	font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: 'tnum' 1, 'zero' 1;
 }
 
-.status-indicator .circle.circle--animated {
-    animation-iteration-count: infinite;
-    animation-delay: 1s;
-    animation-fill-mode: backwards;
-    animation-duration: 4s;
-    animation-timing-function: linear
+.qsd-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--qsd-dim);
 }
 
-.status-indicator .circle-main {
-    z-index: 3;
-    background: #000
+.qsd-panel {
+	background: var(--qsd-panel);
+	border: 1px solid var(--qsd-seam);
+	border-radius: var(--qsd-radius-m);
 }
 
-.status-indicator .circle-main.circle--animated {
-    animation-name: pulsate-main-infinite
+.qsd-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 36px;
+	padding: 8px 16px;
+	border-radius: var(--qsd-radius-s);
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1.4;
+	cursor: pointer;
+	border: 1px solid transparent;
+	transition: background-color 150ms ease-out, border-color 150ms ease-out, opacity 150ms ease-out;
+	user-select: none;
+}
+.qsd-btn:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+.qsd-btn-primary {
+	background: var(--qsd-accent);
+	color: var(--qsd-accent-ink);
+}
+.qsd-btn-primary:hover:not(:disabled) {
+	filter: brightness(0.92);
+}
+.qsd-btn-ghost {
+	background: var(--qsd-raise);
+	color: var(--qsd-ink);
+	border-color: var(--qsd-seam);
+}
+.qsd-btn-ghost:hover:not(:disabled) {
+	filter: brightness(1.08);
+}
+.qsd-btn-danger-ghost {
+	background: transparent;
+	color: var(--qsd-danger);
+	border-color: var(--qsd-seam);
+}
+.qsd-btn-danger-ghost:hover:not(:disabled),
+.qsd-btn-danger-ghost:focus-visible {
+	border-color: var(--qsd-danger);
 }
 
-.status-indicator .circle-secondary {
-    z-index: 2;
-    background: rgba(0, 0, 0, .1)
+.qsd-input {
+	background: var(--qsd-raise);
+	border: 1px solid var(--qsd-seam);
+	border-radius: var(--qsd-radius-s);
+	color: var(--qsd-ink);
+	font-size: 13px;
+	padding: 8px 12px;
+	width: 100%;
+}
+.qsd-input::placeholder {
+	color: var(--qsd-dim);
+	opacity: 1;
 }
 
-.status-indicator .circle-secondary.circle--animated {
-    animation-name: pulsate-secondary-infinite
+.qsd-seg {
+	display: inline-flex;
+	background: var(--qsd-raise);
+	border: 1px solid var(--qsd-seam);
+	border-radius: var(--qsd-radius-s);
+	padding: 2px;
+	gap: 2px;
+}
+.qsd-seg button {
+	border-radius: 4px;
+	padding: 4px 10px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--qsd-dim);
+	white-space: nowrap;
+}
+.qsd-seg button[aria-checked='true'] {
+	background: var(--qsd-accent);
+	color: var(--qsd-accent-ink);
 }
 
-.status-indicator .circle-tertiary {
-    z-index: 1;
-    background: rgba(0, 0, 0, .6);
-    opacity: 1
+.qsd-row-btn {
+	width: 100%;
+	text-align: left;
+	border: 1px solid var(--qsd-seam);
+	background: var(--qsd-panel);
+	border-radius: var(--qsd-radius-m);
+	padding: 12px;
+	transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.qsd-row-btn:hover:not(:disabled) {
+	background: var(--qsd-raise);
+}
+.qsd-row-btn[data-selected='true'] {
+	border-color: var(--qsd-accent);
+}
+.qsd-row-btn:disabled {
+	opacity: 0.5;
 }
 
-.status-indicator .circle-tertiary.circle--animated {
-    animation-name: pulsate-tertiary
+.qsd-drop-active {
+	background: var(--qsd-raise);
+	border-color: var(--qsd-accent);
 }
 
-.status-indicator--infinite .circle.circle--animated {
-    animation-iteration-count: infinite
+@layer utilities {
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	.no-scrollbar {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
 }
 
-.status-indicator--success .circle-main {
-	@apply bg-black
+/* Blueprint schematic layer (pinned user direction, overrides quiet-console restraint) */
+.bp-dots {
+	background-image: radial-gradient(#1e293b 1px, transparent 1px);
+	background-size: 16px 16px;
 }
 
-.status-indicator--success .circle-secondary {
-	@apply bg-black bg-opacity-10
+@keyframes flow {
+	to { stroke-dashoffset: -20; }
+}
+.flow-line {
+	stroke-dasharray: 6 6;
+	animation: flow 1s linear infinite;
 }
 
-.status-indicator--success .circle-tertiary {
-	@apply bg-black bg-opacity-40
+@keyframes pulse-dot {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.25; }
+}
+.pulse-dot {
+	animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
-@keyframes pulsate-tertiary {
-    45% {
-        transform: scale(1, 1)
-    }
-    80% {
-        transform: scale(3, 3);
-        opacity: 0
-    }
-    100% {
-        transform: scale(3, 3);
-        opacity: 0
-    }
+.radar-sweep {
+	transform-origin: 100px 100px;
+	animation: radar-spin 3s linear infinite;
+}
+@keyframes radar-spin {
+	to { transform: rotate(360deg); }
+}
+@keyframes radar-ping {
+	0%, 100% { opacity: 0.9; }
+	50% { opacity: 0.15; }
+}
+.radar-ping {
+	animation: radar-ping 2.2s ease-in-out infinite;
 }
 
-@keyframes pulsate-main-infinite {
-    20% {
-        transform: scale(1, 1)
-    }
-    45% {
-        transform: scale(1.2, 1.2)
-    }
-    55% {
-        transform: scale(1.2, 1.2)
-    }
-    80% {
-        transform: scale(1, 1)
-    }
+.bp-sketch {
+	border: 2px solid #fb923c;
+	border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
 }
 
-@keyframes pulsate-secondary-infinite {
-    10% {
-        transform: scale(1, 1)
-    }
-    25% {
-        transform: scale(1, 1)
-    }
-    50% {
-        transform: scale(3, 3)
-    }
-    75% {
-        transform: scale(3, 3)
-    }
-    100% {
-        transform: scale(1, 1)
-    }
-}
-
-.btn {
-	@apply h-12 min-h-12 cursor-pointer rounded-xl font-medium px-4 inline-flex justify-center items-center gap-2 hover:bg-gray-500 hover:bg-opacity-10
-}
-
-.checkbox {
-    flex-shrink: 0;
-    --chkbg: var(--fallback-bc, oklch(var(--bc) / 1));
-    --chkfg: var(--fallback-b1, oklch(var(--b1) / 1));
-    height: 1.5rem;
-    width: 1.5rem;
-    cursor: pointer;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    border-radius: var(--rounded-btn, 0.5rem);
-    border-width: 1px;
-    border-color: var(--fallback-bc, oklch(var(--bc) / var(--tw-border-opacity)));
-    --tw-border-opacity: .2;
-}
-
-.checkbox:checked, .checkbox[checked=true], .checkbox[aria-checked=true] {
-    background-repeat: no-repeat;
-    animation: checkmark var(--animation-input, .2s) ease-out;
-    background-color: #bbf7d0;
-    background-image: linear-gradient(-45deg, transparent 65%, #bbf7d0 65.99%), linear-gradient(45deg, transparent 75%, #bbf7d0 75.99%), linear-gradient(-45deg, #bbf7d0 40%, transparent 40.99%), linear-gradient(45deg, #bbf7d0 30%, black 30.99%, black 40%, transparent 40.99%), linear-gradient(-45deg, black 50%, #bbf7d0 50.99%);
-}
-
-.checkbox:checked, .checkbox[checked=true], .checkbox[aria-checked=true] {
-	@apply bg-green-200 border-green-200 text-black;
-}
-
-.circular-progress {
-	--size: 250px;
-	--half-size: calc(var(--size) / 2);
-	--stroke-width: 12px;
-	--radius: calc((var(--size) - var(--stroke-width)) / 2);
-	--circumference: calc(var(--radius) * pi * 2);
-	--dash: calc((var(--progress) * var(--circumference)) / 100);
-}
-
-.circular-progress circle {
-	cx: var(--half-size);
-	cy: var(--half-size);
-	r: var(--radius);
-	stroke-width: var(--stroke-width);
-	fill: none;
-	stroke-linecap: round;
-}
-
-.circular-progress circle.bg {
-  	stroke: #ddd;
-}
-
-.circular-progress circle.fg {
-	transform: rotate(-90deg);
-	transform-origin: var(--half-size) var(--half-size);
-	stroke-dasharray: var(--dash) calc(var(--circumference) - var(--dash));
-	transition: stroke-dasharray 0.3s linear 0s;
-
-	@apply stroke-black
-}
-
-.error circle.bg, .error circle.fg {
-    @apply !stroke-red-400
+@media (prefers-reduced-motion: reduce) {
+	.flow-line,
+	.pulse-dot,
+	.radar-sweep,
+	.radar-ping {
+		animation: none;
+	}
 }

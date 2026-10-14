@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { open } from '@tauri-apps/plugin-shell';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToastStore } from '../vue_lib/stores/useToastStore';
@@ -8,7 +8,8 @@ import type { TransferView } from '../types/qsd';
 import { baseName, humanSize } from '../types/qsd';
 import { useTransfersStore } from '../stores/transfers';
 import ConsentCard from './ConsentCard.vue';
-import ProgressBar from './ProgressBar.vue';
+
+const BLOCKS = 24;
 
 const props = defineProps({
 	transfer: { type: Object as () => TransferView, required: true },
@@ -19,18 +20,58 @@ const toasts = useToastStore();
 
 const t = computed(() => props.transfer);
 const meta = computed(() => props.transfer.metadata);
-const deviceName = computed(() => meta.value?.source?.name ?? 'Unknown');
+const deviceName = computed(() => meta.value?.source?.name ?? 'UNKNOWN');
 const files = computed(() => meta.value?.files ?? []);
 const isConsent = computed(() => t.value.state === 'WaitingForUserConsent');
 const isActive = computed(() => ['SentIntroduction', 'SendingFiles', 'ReceivingFiles'].includes(t.value.state));
 const isSending = computed(() => ['SentIntroduction', 'SendingFiles'].includes(t.value.state));
 const isFinished = computed(() => t.value.state === 'Finished');
 const isTerminalError = computed(() => ['Cancelled', 'Rejected', 'Disconnected'].includes(t.value.state));
-const progressLabel = computed(() => {
+
+const frac = computed(() => {
 	const ack = meta.value?.ack_bytes ?? 0;
 	const total = meta.value?.total_bytes ?? 0;
-	if (!total) return '';
-	return `${humanSize(ack)} / ${humanSize(total)}`;
+	if (!total || total <= 0) return 0;
+	return Math.min(1, Math.max(0, ack / total));
+});
+const filledBlocks = computed(() => Math.round(frac.value * BLOCKS));
+
+interface Sample { at: number; bytes: number }
+const samples = ref<Sample[]>([]);
+let clock: ReturnType<typeof setInterval> | null = null;
+
+function sample() {
+	const b = meta.value?.ack_bytes ?? 0;
+	const at = Date.now();
+	samples.value.push({ at, bytes: b });
+	while (samples.value.length > 2 && at - samples.value[0].at > 8000) samples.value.shift();
+}
+onMounted(() => {
+	sample();
+	clock = setInterval(sample, 500);
+});
+onBeforeUnmount(() => {
+	if (clock) clearInterval(clock);
+});
+watch(() => t.value.id, () => {
+	samples.value = [];
+	sample();
+});
+
+const speedBps = computed(() => {
+	const s = samples.value;
+	if (s.length < 2) return 0;
+	const dt = (s[s.length - 1].at - s[0].at) / 1000;
+	if (dt <= 0) return 0;
+	return Math.max(0, (s[s.length - 1].bytes - s[0].bytes) / dt);
+});
+const eta = computed(() => {
+	const total = meta.value?.total_bytes ?? 0;
+	const ack = meta.value?.ack_bytes ?? 0;
+	if (!total || speedBps.value <= 0) return '—';
+	const s = Math.ceil((total - ack) / speedBps.value);
+	if (s <= 0) return '0:00';
+	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 });
 
 async function accept() {
@@ -68,14 +109,12 @@ async function copyText() {
 		await writeText(text);
 		toasts.addToast('Copied to clipboard', ToastType.Success);
 	} catch (e) {
-		toasts.addToast('Unknown error while copying text', ToastType.Error);
+		toasts.addToast('Copy failed', ToastType.Error);
 		console.error(e);
 	}
 }
 
 async function openTarget() {
-	// File/text/URL actions (§4.2, PRODUCT parity): files → Show in folder best-effort
-	// via shell.open on download dir; text → Copy; url → Open. Never saves text as file.
 	const url = meta.value?.url ?? null;
 	const fileHint = files.value[0] ?? null;
 	const target = url ?? fileHint;
@@ -83,123 +122,80 @@ async function openTarget() {
 	try {
 		await open(target);
 	} catch (e) {
-		toasts.addToast('Error opening target, it may not be a valid URI', ToastType.Error);
+		toasts.addToast('Could not open target', ToastType.Error);
 		console.error(e);
 	}
 }
 </script>
 
 <template>
-	<div class="w-full rounded-3xl flex flex-row gap-6 p-4 mb-4 bg-green-100">
-		<div class="flex-1 flex flex-col text-sm min-w-0">
-			<h4 class="text-base font-medium">
-				{{ deviceName }}
-			</h4>
+	<ConsentCard v-if="isConsent" :transfer="transfer" @accept="accept" @decline="decline" />
+	<div v-else class="border border-slate-800 bg-slate-900 p-3 font-mono text-[12px]">
+		<div class="flex items-baseline justify-between gap-2 min-w-0">
+			<p class="text-[13px] font-bold text-slate-200 truncate" :title="deviceName">{{ deviceName }}</p>
+			<p class="text-slate-500 shrink-0">{{ t.state.toUpperCase() }}</p>
+		</div>
 
-			<ConsentCard v-if="isConsent" :transfer="transfer" @accept="accept" @decline="decline" />
-
-			<div v-else-if="isActive" class="flex-1 flex flex-col">
-				<p class="mt-2" aria-live="polite">
-					{{ isSending ? 'Sending…' : 'Receiving…' }}
-					<span v-if="progressLabel" class="text-xs opacity-70">{{ progressLabel }}</span>
-				</p>
-				<ProgressBar
-					v-if="(meta?.total_bytes ?? 0) > 0" class="mt-2"
-					:ack-bytes="meta?.ack_bytes ?? 0" :total-bytes="meta?.total_bytes ?? 0" />
-				<ul class="mt-1">
-					<li
-						v-for="(f, i) in files" :key="`${f}-${i}`"
-						class="overflow-hidden whitespace-nowrap text-ellipsis" :title="f">
-						{{ baseName(f) }}
-					</li>
-				</ul>
-				<p v-if="meta?.payload_kind === 'Text'" class="mt-1 italic opacity-70">
-					Text
-				</p>
-				<p v-if="meta?.payload_kind === 'Url'" class="mt-1 overflow-hidden whitespace-nowrap text-ellipsis" :title="meta?.url ?? ''">
-					{{ meta?.url }}
-				</p>
-				<div class="flex flex-row justify-end gap-4 mt-1">
-					<button
-						type="button"
-						class="btn px-3 rounded-xl active:scale-95 transition duration-150 ease-in-out shadow-none"
-						@click.stop="cancel">
-						Cancel
-					</button>
-				</div>
+		<div v-if="isActive" class="mt-2">
+			<div class="flex justify-between text-slate-400" aria-live="polite">
+				<span class="text-sky-300">{{ isSending ? 'TX' : 'RX' }} {{ humanSize(speedBps) }}/s</span>
+				<span class="tabular-nums">{{ humanSize(meta?.ack_bytes ?? 0) }} / {{ humanSize(meta?.total_bytes ?? 0) }}</span>
+				<span class="tabular-nums">ETA {{ eta }}</span>
 			</div>
-
-			<div v-else-if="isFinished" class="flex-1 flex flex-col">
-				<p class="mt-2">
-					<span v-if="meta?.payload_kind === 'Files'">Received {{ files.length }} file{{ files.length === 1 ? '' : 's' }}</span>
-					<span v-else-if="meta?.payload_kind === 'Text'">Received text</span>
-					<span v-else-if="meta?.payload_kind === 'Url'">Received link</span>
-					<span v-else-if="meta?.payload_kind === 'WiFi'">Received Wi-Fi</span>
-					<span v-else>Received</span>
-				</p>
-				<ul v-if="files.length > 0" class="mt-1">
-					<li
-						v-for="(f, i) in files" :key="`${f}-${i}`"
-						class="overflow-hidden whitespace-nowrap text-ellipsis" :title="f">
-						{{ baseName(f) }}
-					</li>
-				</ul>
-				<p
-					v-if="meta?.payload_kind === 'Text' && (meta?.text || meta?.payload_preview)"
-					class="!select-text cursor-text overflow-hidden whitespace-nowrap text-ellipsis"
-					:title="meta?.text ?? meta?.payload_preview ?? ''">
-					{{ meta?.text ?? meta?.payload_preview }}
-				</p>
-				<p
-					v-if="meta?.payload_kind === 'Url' && meta?.url"
-					class="overflow-hidden whitespace-nowrap text-ellipsis" :title="meta?.url">
-					{{ meta?.url }}
-				</p>
-				<p v-if="meta?.payload_kind === 'WiFi' && meta?.wifi_ssid" class="mt-1">
-					Wi-Fi network {{ meta?.wifi_ssid }}
-				</p>
-				<div class="flex flex-row justify-end gap-4 mt-1">
-					<button
-						v-if="meta?.url || files.length > 0" type="button"
-						class="btn px-3 rounded-xl active:scale-95 transition duration-150 ease-in-out shadow-none"
-						@click.stop="openTarget">
-						Open
-					</button>
-					<button
-						v-if="(meta?.payload_kind === 'Text' || meta?.payload_kind === 'Url') && (meta?.text || meta?.url || meta?.payload_preview)"
-						type="button"
-						class="btn px-3 rounded-xl active:scale-95 transition duration-150 ease-in-out shadow-none"
-						@click.stop="copyText">
-						{{ meta?.payload_kind === 'Url' ? 'Copy link' : 'Copy' }}
-					</button>
-					<button
-						type="button"
-						class="btn px-3 rounded-xl active:scale-95 transition duration-150 ease-in-out shadow-none"
-						@click.stop="clear">
-						Clear
-					</button>
-				</div>
+			<div class="grid mt-1" :style="{ gridTemplateColumns: `repeat(${BLOCKS}, minmax(0,1fr))`, gap: '2px' }" role="progressbar" :aria-valuenow="Math.round(frac * 100)" aria-valuemin="0" aria-valuemax="100">
+				<span
+					v-for="i in BLOCKS" :key="i" class="h-3"
+					:class="i <= filledBlocks ? 'bg-sky-400' : 'bg-slate-800'" />
 			</div>
-
-			<div v-else-if="isTerminalError">
-				<p class="mt-2">
-					{{ t.state === 'Cancelled' ? 'Transfer cancelled' : t.state === 'Rejected' ? 'Transfer rejected' : 'Unexpected disconnection' }}
-				</p>
-				<div class="flex flex-row justify-end gap-4 mt-1">
-					<button
-						type="button"
-						class="btn px-3 rounded-xl active:scale-95 transition duration-150 ease-in-out shadow-none"
-						@click.stop="clear">
-						Clear
-					</button>
-				</div>
+			<ul class="mt-1 text-slate-400">
+				<li v-for="(f, i) in files.slice(0, 3)" :key="`${f}-${i}`" class="truncate" :title="f">
+					+ {{ baseName(f) }}
+				</li>
+			</ul>
+			<div class="flex justify-end mt-2">
+				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="cancel">
+					CANCEL
+				</button>
 			</div>
+		</div>
 
-			<div v-else>
-				<p class="mt-2 opacity-70">
-					Connecting…
-				</p>
+		<div v-else-if="isFinished" class="mt-1 text-slate-300">
+			<p>
+				<span v-if="meta?.payload_kind === 'Files'">RX {{ files.length }} FILE{{ files.length === 1 ? '' : 'S' }}</span>
+				<span v-else-if="meta?.payload_kind === 'Text'">RX TEXT</span>
+				<span v-else-if="meta?.payload_kind === 'Url'">RX LINK</span>
+				<span v-else-if="meta?.payload_kind === 'WiFi'">RX WI-FI{{ meta?.wifi_ssid ? ` · ${meta.wifi_ssid}` : '' }}</span>
+				<span v-else>RX DONE</span>
+				<span v-if="(meta?.total_bytes ?? 0) > 0" class="text-slate-500 tabular-nums"> · {{ humanSize(meta?.total_bytes ?? 0) }}</span>
+			</p>
+			<div class="flex justify-end gap-2 mt-2">
+				<button
+					v-if="meta?.url || files.length > 0" type="button"
+					class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="openTarget">
+					OPEN
+				</button>
+				<button
+					v-if="(meta?.payload_kind === 'Text' || meta?.payload_kind === 'Url') && (meta?.text || meta?.url || meta?.payload_preview)"
+					type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="copyText">
+					{{ meta?.payload_kind === 'Url' ? 'COPY LINK' : 'COPY' }}
+				</button>
+				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="clear">
+					CLEAR
+				</button>
 			</div>
+		</div>
+
+		<div v-else-if="isTerminalError" class="mt-1 text-slate-400">
+			<p>{{ t.state === 'Cancelled' ? 'TX CANCELLED' : t.state === 'Rejected' ? 'TX REJECTED' : 'LINK LOST' }}</p>
+			<div class="flex justify-end mt-2">
+				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="clear">
+					CLEAR
+				</button>
+			</div>
+		</div>
+
+		<div v-else class="mt-1 text-slate-500" aria-live="polite">
+			HANDSHAKE…
 		</div>
 	</div>
 </template>

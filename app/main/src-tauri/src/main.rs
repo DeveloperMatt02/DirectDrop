@@ -81,13 +81,13 @@ async fn main() -> Result<(), anyhow::Error> {
             // Setting up logging inside file for the app
             set_up_logging(app.app_handle())?;
 
-            debug!("Starting setup of RQuickShare app");
+            debug!("Starting setup of DirectDrop app");
 
             // Initialize default values for the store
             init_default(app.app_handle());
 
             // Initialize system Tray
-            let name = MenuItemBuilder::new("RQuickShare")
+            let name = MenuItemBuilder::new("DirectDrop")
                 .enabled(false)
                 .build(app)?;
             let show = MenuItemBuilder::with_id("show", "Show").build(app)?;
@@ -134,7 +134,7 @@ async fn main() -> Result<(), anyhow::Error> {
             tokio::task::block_in_place(|| {
                 tauri::async_runtime::block_on(async move {
                     trace!("Beginning of RQS start");
-                    // Start the RQuickShare service (4 args contro il core attuale)
+                    // Start the DirectDrop service (4 args contro il core attuale)
                     let mut rqs =
                         RQS::new(visibility, port_number, download_path, Some(device_name));
                     let (sender_file, ble_receiver) = rqs.run().await.unwrap();
