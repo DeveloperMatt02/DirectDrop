@@ -6,3 +6,4 @@ gen
 .github/agents/
 .github/hooks/
 .github/skills/
+app/main/vite.config.ts.timestamp-*

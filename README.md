@@ -4,6 +4,33 @@
 
 This is a fork of upstream `quickshare-direct`. All of the upstream headless receiver / sender stack is preserved unchanged (BLE advertisement/GATT first contact, Wi-Fi Direct GO/client upgrade, LAN fallback, polkit helpers, headless CLI daemon). What this fork adds is a redesigned Tauri desktop GUI in `app/main/` with full behavioral parity to the CLI.
 
+## Quick Install (Terminal)
+
+Universal one-liner — detects the distro and installs the matching bundle from the
+latest `DeveloperMatt02/DirectDrop` release (`.rpm` on Fedora/RHEL, `.deb` on
+Debian/Ubuntu, `.AppImage` into `~/.local/bin` everywhere else):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash
+```
+
+Direct commands per distro (same source, no helper script):
+
+```bash
+# Fedora / RHEL (.rpm)
+URL=$(curl -fsSL https://api.github.com/repos/DeveloperMatt02/DirectDrop/releases/latest \
+  | grep -o 'https://[^"]*\.rpm' | head -n 1)
+sudo dnf install -y "$URL"
+
+# Debian / Ubuntu (.deb)
+URL=$(curl -fsSL https://api.github.com/repos/DeveloperMatt02/DirectDrop/releases/latest \
+  | grep -o 'https://[^"]*\.deb' | head -n 1)
+curl -fL -o /tmp/directdrop.deb "$URL"
+sudo apt-get install -y /tmp/directdrop.deb
+```
+
+Or pick the asset by hand from the [latest release](https://github.com/DeveloperMatt02/DirectDrop/releases/latest).
+
 Upstream quick-start still applies:
 
 1. **Discovery + first contact over Bluetooth LE** (works with the phone off Wi-Fi).

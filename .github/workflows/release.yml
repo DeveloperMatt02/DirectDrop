@@ -1,0 +1,130 @@
+# Release (DirectDrop GUI + CLI) — rQuickShare-style automatic GitHub Releases.
+#
+# Triggers:
+#   - push of a tag v*.*.*  -> publishes the Release
+#   - workflow_dispatch      -> builds the same assets; without a `tag` input they go
+#                               to a throwaway DRAFT release (manual-<run_number>), so no
+#                               junk is ever published. Pass `tag` to (re)publish assets
+#                               to an existing release tag.
+#
+# Publishes on ubuntu-22.04 (x86_64):
+#   - Tauri v2 bundles (.deb, .rpm, .AppImage) via tauri-action
+#   - directdrop-cli-linux-x86_64.tar.gz: headless daemon + packaging + install script
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish assets to (empty = draft manual-<run_number>)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.ref_type }}" = tag ]; then
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+            echo "draft=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=manual-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "draft=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install system dependencies (Tauri v2 + BlueZ/D-Bus)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libdbus-1-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            libssl-dev \
+            pkg-config \
+            rpm \
+            file \
+            protobuf-compiler
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm 9
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            app/main/src-tauri
+            core_lib
+
+      - name: Install frontend dependencies
+        run: pnpm install
+        working-directory: app/main
+
+      - name: Build & publish Tauri bundles (.deb, .rpm, .AppImage)
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: app/main
+          tauriScript: pnpm tauri
+          tagName: ${{ steps.tag.outputs.name }}
+          releaseName: DirectDrop ${{ steps.tag.outputs.name }}
+          releaseBody: |-
+            DirectDrop desktop GUI (Tauri) + headless CLI daemon.
+
+            - `.deb` / `.rpm` / `.AppImage`: GUI bundles built by Tauri.
+            - `directdrop-cli-linux-x86_64.tar.gz`: `quickshare-direct` daemon binary + `packaging/` + `install.sh` + `Makefile` (install: `tar xzf ... && sudo make install`; uninstall: `sudo make uninstall` or `install.sh --uninstall`).
+
+            Quick install: `curl -fsSL https://raw.githubusercontent.com/DeveloperMatt02/DirectDrop/main/get-directdrop.sh | bash`
+          releaseDraft: ${{ steps.tag.outputs.draft }}
+          prerelease: false
+
+      # NOTE: there is no cli/Cargo.toml in this repo; the daemon is the
+      # `quickshare-direct` binary of core_lib (see Makefile `build` target).
+      - name: Build CLI daemon
+        run: cargo build --release --locked --manifest-path core_lib/Cargo.toml --bin quickshare-direct
+
+      - name: Package CLI daemon
+        run: |
+          rm -rf dist-cli directdrop-cli-linux-x86_64.tar.gz
+          mkdir -p dist-cli/directdrop-cli
+          cp core_lib/target/release/quickshare-direct dist-cli/directdrop-cli/
+          cp install.sh Makefile LICENSE VERSION dist-cli/directdrop-cli/
+          cp -r packaging dist-cli/directdrop-cli/
+          tar -czf directdrop-cli-linux-x86_64.tar.gz -C dist-cli directdrop-cli
+
+      - name: Upload CLI tarball to the same release
+        run: gh release upload "${{ steps.tag.outputs.name }}" directdrop-cli-linux-x86_64.tar.gz --clobber
