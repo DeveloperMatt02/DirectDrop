@@ -1,48 +1,27 @@
-import { State } from '@martichou/core_lib/bindings/State';
-import { DeviceType } from '@martichou/core_lib/bindings/DeviceType';
-import { Visibility } from '@martichou/core_lib/bindings/Visibility';
+// Legacy re-exports kept for incremental migration. New code imports from
+// ../types/qsd.ts directly. stateToDisplay maps to the DTO display filter (§4.2).
+export * from '../types/qsd';
 
-export interface ToDelete {
-	id: string,
-	triggered: number
-}
+import type { TransferStateDto } from '../types/qsd';
 
-export interface DisplayedItem {
-	id: string,
-	name: string,
-	deviceType: DeviceType,
-	endpoint: boolean,
+export const autostartKey = 'autostart';
+export const realcloseKey = 'realclose';
+export const startminimizedKey = 'startminimized';
+export const visibilityKey = 'visibility';
+export const downloadPathKey = 'download_path';
 
-	state?: State,
-	pin_code?: string,
-	files?: string[],
-	text_description?: string,
-	text_payload?: string,
-	text_type?: string,
-	destination?: string,
-	total_bytes?: number,
-	ack_bytes?: number,
-}
-
-export const visibilityToNumber: { [key in Visibility]: number } = {
-	'Visible': 0,
-	'Invisible': 1,
-	'Temporarily': 2,
-};
-
-export const numberToVisibility: { [key: number]: Visibility } = {
-	0: "Visible",
-	1: "Invisible",
-	2: "Temporarily",
-};
-
-export const autostartKey = "autostart";
-export const realcloseKey = "realclose";
-export const startminimizedKey = "startminimized";
-export const visibilityKey = "visibility";
-export const downloadPathKey = "download_path";
-export const stateToDisplay: Array<Partial<State>> = ["ReceivedPairedKeyResult", "WaitingForUserConsent", "ReceivingFiles", "Disconnected",
-	"Finished", "SentIntroduction", "SendingFiles", "Cancelled", "Rejected"]
+/** Displayed states (handshake transients hidden, §4.2). */
+export const stateToDisplay: ReadonlyArray<TransferStateDto> = [
+	'ReceivedPairedKeyResult',
+	'WaitingForUserConsent',
+	'ReceivingFiles',
+	'Disconnected',
+	'Finished',
+	'SentIntroduction',
+	'SendingFiles',
+	'Cancelled',
+	'Rejected',
+];
 
 export interface Toast {
 	id: number;
@@ -51,7 +30,7 @@ export interface Toast {
 }
 
 export enum ToastType {
-	Success = "SUCCESS",
-	Error = "ERROR",
-	Info = "INFO",
+	Success = 'SUCCESS',
+	Error = 'ERROR',
+	Info = 'INFO',
 }

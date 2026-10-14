@@ -1,223 +1,129 @@
-import { Visibility } from '@martichou/core_lib/bindings/Visibility';
-import { TauriVM } from './helper/ParamsHelper';
-import { autostartKey, DisplayedItem, downloadPathKey, numberToVisibility, realcloseKey, startminimizedKey, stateToDisplay, visibilityKey, visibilityToNumber } from './types';
-import { SendInfo } from '@martichou/core_lib/bindings/SendInfo';
-import { ChannelMessage } from '@martichou/core_lib/bindings/ChannelMessage';
-import { ChannelAction } from '@martichou/core_lib';
+import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { gt } from 'semver';
+import { useToastStore } from './stores/useToastStore';
+import { ToastType } from './types';
+import { baseName, describeTransfer, humanSize, validateSendFiles } from '../types/qsd';
+import type { EndpointDto, TransferView } from '../types/qsd';
+import { useDevicesStore } from '../stores/devices';
+import { useSessionStore } from '../stores/session';
+import { useTransfersStore } from '../stores/transfers';
 
-function _displayedItems(vm: TauriVM): Array<DisplayedItem> {
-	const ndisplayed = new Array<DisplayedItem>();
-
-	vm.endpointsInfo.forEach((el) => {
-		const idx = ndisplayed.findIndex((nel) => el.id == nel.id);
-		if (idx !== -1) return;
-
-		ndisplayed.push({
-			id: el.id,
-			name: el.name ?? 'Unknown',
-			deviceType: el.rtype ?? 'Unknown',
-			endpoint: true,
-		})
-	});
-
-	vm.requests.filter((el) => stateToDisplay.includes(el.state ?? 'Initial')).forEach((el) => {
-		const idx = ndisplayed.findIndex((nel) => el.id == nel.id);
-		const elem: DisplayedItem = {
-			id: el.id,
-			name: el.meta?.source?.name ?? 'Unknown',
-			deviceType: el.meta?.source?.device_type ?? 'Unknown',
-			endpoint: false,
-
-			state: el.state ?? undefined,
-			pin_code: el.meta?.pin_code ?? undefined,
-			destination: el.meta?.destination ?? undefined,
-			files: el.meta?.files ?? undefined,
-			text_description: el.meta?.text_description ?? undefined,
-			text_payload: el.meta?.text_payload ?? undefined,
-			text_type: el.meta?.text_type ?? undefined,
-			ack_bytes: (el.meta?.ack_bytes as number | undefined) ?? undefined,
-			total_bytes: (el.meta?.total_bytes as number | undefined) ?? undefined,
-		};
-
-		if (idx !== -1) {
-			ndisplayed.splice(idx, 1, elem);
-		} else {
-			ndisplayed.push(elem)
-		}
-	});
-
-	return ndisplayed;
-}
-
-async function setAutoStart(vm: TauriVM, autostart: boolean) {
-	if (autostart) {
-		await vm.enable();
-	} else {
-		await vm.disable();
-	}
-
-	await vm.store.set(autostartKey, autostart);
-	await vm.store.save();
-	vm.autostart = autostart;
-}
-
-async function applyAutoStart(vm: TauriVM) {
-	vm.autostart = await vm.store.get(autostartKey) ?? false;
-
-	if (vm.autostart) {
-		await vm.enable();
-	} else {
-		await vm.disable();
-	}
-}
-
-async function setRealClose(vm: TauriVM, realclose: boolean) {
-	await vm.store.set(realcloseKey, realclose);
-	await vm.store.save();
-	vm.realclose = realclose;
-}
-
-async function getRealclose(vm: TauriVM) {
-	vm.realclose = await vm.store.get(realcloseKey) ?? false;
-}
-
-async function setStartMinimized(vm: TauriVM, startminimized: boolean) {
-	await vm.store.set(startminimizedKey, startminimized);
-	await vm.store.save();
-	vm.startminimized = startminimized;
-}
-
-async function getStartMinimized(vm: TauriVM) {
-	vm.startminimized = await vm.store.get(startminimizedKey) ?? false;
-}
-
-async function setVisibility(vm: TauriVM, visibility: Visibility) {
-	await vm.invoke('change_visibility', { message: visibility });
-	await vm.store.set(visibilityKey, visibilityToNumber[visibility]);
-	await vm.store.save();
-	vm.visibility = visibility;
-}
-
-async function getVisibility(vm: TauriVM) {
-	vm.visibility = numberToVisibility[(await vm.store.get(visibilityKey) ?? 0) as number];
-}
-
-async function invertVisibility(vm: TauriVM) {
-	if (vm.visibility === 'Temporarily') {
-		return;
-	}
-
-	if (vm.visibility === 'Visible') {
-		return await vm.setVisibility(vm, 'Invisible');
-	}
-
-	return await vm.setVisibility(vm, 'Visible');
-}
-
-async function clearSending(vm: TauriVM, ) {
-	await vm.invoke('stop_discovery');
-	vm.outboundPayload = undefined;
-	vm.discoveryRunning = false;
-	vm.endpointsInfo = [];
-}
-
-function removeRequest(vm: TauriVM, id: string) {
-	const idx = vm.requests.findIndex((el) => el.id === id);
-
-	if (idx !== -1) {
-		vm.requests.splice(idx, 1);
-	}
-}
-
-async function sendInfo(vm: TauriVM, eid: string) {
-	if (vm.outboundPayload === undefined) return;
-
-	const ei = vm.endpointsInfo.find((el) => el.id === eid);
-	if (!ei || !ei.ip || !ei.port) return;
-
-	const msg: SendInfo = {
-		id: ei.id,
-		name: ei.name ?? 'Unknown',
-		addr: ei.ip + ":" + ei.port,
-		ob: vm.outboundPayload,
-	};
-
-	await vm.invoke('send_payload', { message: msg });
-}
-
-async function sendCmd(vm: TauriVM, id: string, action: ChannelAction) {
-	const cm: ChannelMessage = {
-		id: id,
-		direction: 'FrontToLib',
-		action: action,
-		meta: null,
-		state: null,
-		rtype: null,
-	};
-	console.log("js2rs:", cm);
-
-	await vm.invoke('send_to_rs', { message: cm });
-}
-
-function blured() {
-	(document.activeElement as any).blur();
-}
-
-function getProgress(item: DisplayedItem): string {
-	const value = item.ack_bytes! / item.total_bytes! * 100;
+/** Progress ring style var (--progress: 0-100). Guards NaN/zero totals. */
+export function getProgress(item: Pick<TransferView, 'metadata'>): string {
+	const ack = item.metadata?.ack_bytes ?? 0;
+	const total = item.metadata?.total_bytes ?? 0;
+	if (!total || total <= 0) return '--progress: 0';
+	const value = Math.min(100, Math.max(0, (ack / total) * 100));
 	return `--progress: ${value}`;
 }
 
-async function setDownloadPath(vm: TauriVM, dest: string) {
-	await vm.invoke('change_download_path', { message: dest });
-	await vm.store.set(downloadPathKey, dest);
-	await vm.store.save();
-	vm.downloadPath = dest;
+/** File rows: basename display, full path in title. */
+export function displayNames(files: string[] | null | undefined): string[] {
+	return (files ?? []).map(baseName);
 }
 
-async function getDownloadPath(vm: TauriVM) {
-	vm.downloadPath = await vm.store.get(downloadPathKey) ?? undefined;
-}
+export { baseName, describeTransfer, humanSize, validateSendFiles };
 
-async function getLatestVersion(vm: TauriVM) {
-	try {
-		const response = await fetch('https://api.github.com/repos/martichou/rquickshare/releases/latest');
-		if (!response.ok) {
-			throw new Error(`Error: ${response.status} ${response.statusText}`);
-		}
-		const data = await response.json();
-		const new_version = data.tag_name.substring(1);
-		console.log(`Latest version: ${vm.version} vs ${new_version}`);
-
-		if (vm.version && gt(new_version, vm.version)) {
-			vm.new_version = new_version;
-		}
-	} catch (err) {
-		console.error(err);
+/** Outbound file pick validation (folders rejected, CLI parity). Throws with toast. */
+export function assertSendableFiles(files: string[]): void {
+	const v = validateSendFiles(files);
+	if (!v.ok) {
+		useToastStore().addToast(v.error ?? 'Invalid selection', ToastType.Error);
+		throw new Error(v.error ?? 'Invalid selection');
 	}
 }
 
-// Default export
+/** Send staged files to an mDNS endpoint (F2, qsd_send_lan). */
+export async function sendToEndpoint(endpointId: string, files: string[]): Promise<void> {
+	const toasts = useToastStore();
+	assertSendableFiles(files);
+	const devices = useDevicesStore();
+	const ep: EndpointDto | undefined = devices.endpoints.get(endpointId);
+	if (!ep?.ip || !ep?.port) {
+		toasts.addToast('Device address unknown — wait for discovery', ToastType.Error);
+		throw new Error('endpoint address unknown');
+	}
+	const id = crypto.randomUUID();
+	await useTransfersStore().sendLan({
+		id,
+		name: ep.name ?? 'Unknown',
+		addr: `${ep.ip}:${ep.port}`,
+		files,
+	});
+}
+
+/** Session actions previously on TauriVM (settings/autostart/visibility). */
+export async function setAutoStart(autostart: boolean): Promise<void> {
+	const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+	if (autostart) await enable();
+	else await disable();
+	const { getStore } = await import('@tauri-apps/plugin-store');
+	const store = (await getStore('.settings.json'))!;
+	await store.set('autostart', autostart);
+	await store.save();
+}
+
+export async function applyAutoStart(): Promise<boolean> {
+	const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+	const { getStore } = await import('@tauri-apps/plugin-store');
+	const store = (await getStore('.settings.json'))!;
+	const v = ((await store.get<boolean>('autostart')) ?? false) as boolean;
+	if (v) await enable();
+	else await disable();
+	return v;
+}
+
+export async function invertVisibility(): Promise<void> {
+	await useSessionStore().invertVisibility();
+}
+
+export async function clearSending(): Promise<void> {
+	try {
+		await invoke('qsd_stop_discovery');
+	} finally {
+		useDevicesStore().clear();
+		useSessionStore().discoveryRunning = false;
+	}
+}
+
+export async function getLatestVersion(currentVersion: string | null): Promise<string | null> {
+	try {
+		const response = await fetch('https://api.github.com/repos/martichou/rquickshare/releases/latest');
+		if (!response.ok) throw new Error(`Error: ${response.status} ${response.statusText}`);
+		const data = (await response.json()) as { tag_name?: string };
+		const tag = data.tag_name ?? '';
+		const next = tag.startsWith('v') ? tag.substring(1) : tag;
+		if (currentVersion && next && gt(next, currentVersion)) return next;
+		return null;
+	} catch (err) {
+		console.error(err);
+		return null;
+	}
+}
+
+export async function loadAppVersion(): Promise<string> {
+	return getVersion();
+}
+
+export function blured() {
+	(document.activeElement as HTMLElement | null)?.blur?.();
+}
+
 export const utils = {
-	_displayedItems,
+	getProgress,
+	displayNames,
+	assertSendableFiles,
+	sendToEndpoint,
 	setAutoStart,
 	applyAutoStart,
-	setRealClose,
-	getRealclose,
-	setVisibility,
-	getVisibility,
 	invertVisibility,
 	clearSending,
-	removeRequest,
-	sendInfo,
-	sendCmd,
-	blured,
-	getProgress,
-	setDownloadPath,
-	getDownloadPath,
 	getLatestVersion,
-	setStartMinimized,
-	getStartMinimized
+	loadAppVersion,
+	blured,
+	describeTransfer,
+	humanSize,
+	validateSendFiles,
 };
 export type UtilsType = typeof utils;
