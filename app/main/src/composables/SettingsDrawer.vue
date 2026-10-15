@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { open as tauriDialog } from '@tauri-apps/plugin-dialog';
+import { isEnabled as autostartEnabled } from '@tauri-apps/plugin-autostart';
 import { getStore } from '@tauri-apps/plugin-store';
 import { storeToRefs } from 'pinia';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useSessionStore } from '../stores/session';
 import { useToastStore } from '../vue_lib/stores/useToastStore';
 import { ToastType } from '../vue_lib/types';
@@ -19,6 +20,12 @@ const toasts = useToastStore();
 
 const autostart = ref(true);
 const realclose = ref(false);
+/**
+ * "KEEP RUNNING ON CLOSE" is the inverse of the stored `realclose` flag
+ * (main.rs handle_window_event: realclose true = closing quits, false =
+ * the window hides and the app stays in the tray). The key is unchanged.
+ */
+const keepRunning = computed(() => !realclose.value);
 const startminimized = ref(false);
 const draftName = ref('');
 
@@ -28,6 +35,13 @@ async function loadPrefs() {
 		autostart.value = ((await store.get<boolean>('autostart')) ?? true) as boolean;
 		realclose.value = ((await store.get<boolean>('realclose')) ?? false) as boolean;
 		startminimized.value = ((await store.get<boolean>('startminimized')) ?? false) as boolean;
+	} catch (e) {
+		console.error(e);
+	}
+	// Show what the OS actually does: the stored flag defaults to true but
+	// nothing enables the autostart entry until the toggle is used.
+	try {
+		autostart.value = await autostartEnabled();
 	} catch (e) {
 		console.error(e);
 	}
@@ -60,10 +74,15 @@ async function toggleAutostart() {
 	}
 }
 
-async function toggleRealclose() {
+async function toggleKeepRunning() {
 	const next = !realclose.value;
-	await persist('realclose', next);
-	realclose.value = next;
+	try {
+		await persist('realclose', next);
+		realclose.value = next;
+	} catch (e) {
+		toasts.addToast('Failed to save setting', ToastType.Error);
+		console.error(e);
+	}
 }
 
 async function toggleStartMinimized() {
@@ -96,6 +115,8 @@ async function saveDeviceName() {
 function onKeydown(e: KeyboardEvent) {
 	if (e.key === 'Escape') close();
 }
+
+defineExpose({ loadPrefs, keepRunning, realclose, toggleKeepRunning });
 </script>
 
 <template>
@@ -135,10 +156,15 @@ function onKeydown(e: KeyboardEvent) {
 						<span class="text-ink">START ON BOOT</span>
 						<span class="tabular-nums" :class="autostart ? 'text-rx' : 'text-faint'">{{ autostart ? 'ON' : 'OFF' }}</span>
 					</button>
-					<button type="button" class="flex items-center justify-between w-full min-h-[40px] py-2 border-b border-seam" @click="toggleRealclose" :aria-pressed="realclose">
+					<button
+						type="button" class="flex items-center justify-between w-full min-h-[40px] py-2"
+						:aria-pressed="keepRunning" aria-describedby="qsd-keep-running-hint" @click="toggleKeepRunning">
 						<span class="text-ink">KEEP RUNNING ON CLOSE</span>
-						<span class="tabular-nums" :class="realclose ? 'text-rx' : 'text-faint'">{{ realclose ? 'ON' : 'OFF' }}</span>
+						<span class="tabular-nums" :class="keepRunning ? 'text-rx' : 'text-faint'">{{ keepRunning ? 'ON' : 'OFF' }}</span>
 					</button>
+					<p id="qsd-keep-running-hint" class="py-1.5 border-b border-seam text-[11px] text-faint">
+						ON: CLOSING THE WINDOW HIDES IT AND DIRECTDROP KEEPS RUNNING. OFF: CLOSING THE WINDOW QUITS.
+					</p>
 					<button type="button" class="flex items-center justify-between w-full min-h-[40px] py-2 border-b border-seam" @click="toggleStartMinimized" :aria-pressed="startminimized">
 						<span class="text-ink">START MINIMIZED</span>
 						<span class="tabular-nums" :class="startminimized ? 'text-rx' : 'text-faint'">{{ startminimized ? 'ON' : 'OFF' }}</span>
