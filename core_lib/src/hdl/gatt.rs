@@ -20,6 +20,7 @@ const INNER_NAME: &str = "ReceiverGattServer";
 
 // Nearby Connections copresence GATT service + advertisement slot-0 characteristic.
 const QS_GATT_SERVICE: u16 = 0xFEF3;
+const GATT_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 const QS_ADV_SLOT0_UUID: &str = "00000000-0000-3000-8000-000000000000";
 // BLE-"weave" GATT socket characteristics (Apple GNS* client code):
 // ToPeripheral = phone -> us (write), FromPeripheral = us -> phone (notify).
@@ -151,7 +152,40 @@ impl ReceiverGattServer {
             self.advertisement.len()
         );
         let handle = self.adapter.serve_gatt_application(app).await?;
-        ctk.cancelled().await;
+        // BlueZ drops the application when the adapter goes away (bluetoothd restarted, controller
+        // re-enumerated after a resume) and nothing would register it again: check that the
+        // service is still listed among the adapter's UUIDs, and return so the caller starts over.
+        let service = Uuid::from_u16(QS_GATT_SERVICE);
+        let mut check = tokio::time::interval_at(
+            tokio::time::Instant::now() + GATT_CHECK_INTERVAL,
+            GATT_CHECK_INTERVAL,
+        );
+        let mut missing = 0;
+        loop {
+            tokio::select! {
+                _ = ctk.cancelled() => break,
+                _ = check.tick() => {
+                    // Bluetooth switched off by the user: wait, a restart would power it on again.
+                    match self.adapter.is_powered().await {
+                        Ok(false) => {
+                            missing = 0;
+                            continue;
+                        }
+                        Ok(true) => {}
+                        Err(e) => return Err(anyhow::anyhow!("adapter gone: {e}")),
+                    }
+                    match self.adapter.uuids().await {
+                        Ok(Some(uuids)) if uuids.contains(&service) => missing = 0,
+                        // Twice in a row, in case BlueZ was still updating the list.
+                        Ok(_) => missing += 1,
+                        Err(e) => return Err(anyhow::anyhow!("adapter gone: {e}")),
+                    }
+                    if missing >= 2 {
+                        return Err(anyhow::anyhow!("GATT service no longer registered"));
+                    }
+                }
+            }
+        }
         info!("{INNER_NAME}: tracker cancelled, returning");
         drop(handle);
 
