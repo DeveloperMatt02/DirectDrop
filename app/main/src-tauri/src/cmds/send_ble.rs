@@ -53,6 +53,8 @@ fn terminal_message(
                 total_bytes,
                 ack_bytes: 0,
             }),
+            // La GUI tiene l'ultimo mezzo ricevuto dal core.
+            transport: None,
         }),
     }
 }

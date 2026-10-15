@@ -1,14 +1,18 @@
 import { defineStore } from 'pinia';
 import { invoke } from '@tauri-apps/api/core';
 import { computed, ref } from 'vue';
+import { useToastStore } from '../vue_lib/stores/useToastStore';
+import { ToastType } from '../vue_lib/types';
 import {
 	QSD_CONSENT_TIMEOUT_MS,
+	transportNotice,
 	type ConsentDto,
 	type SendBleInput,
 	type SendPayloadDto,
 	type TransferActionDto,
 	type TransferDto,
 	type TransferView,
+	type TransportDto,
 } from '../types/qsd';
 
 /**
@@ -19,17 +23,31 @@ import {
  * Consent deadline: now + QSD_CONSENT_TIMEOUT (60s, PRODUCT.md). On expiry
  * without user action the store sends ConsentDecline (CLI parity) and marks
  * expired:true. Countdown display reads ui.consent_deadline.
+ *
+ * Transport: the latest link reported by the core is kept (updates without one
+ * don't clear it); the first fallback of a transfer shows one toast.
  */
 export const useTransfersStore = defineStore('transfers', () => {
 	const items = ref(new Map<string, TransferView>());
 	const expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	const fallbackNotified = new Set<string>();
+
+	function sameTransport(a: TransportDto | null | undefined, b: TransportDto | null | undefined): boolean {
+		return (
+			a?.medium === b?.medium &&
+			a?.expected === b?.expected &&
+			a?.is_fallback === b?.is_fallback &&
+			a?.reason === b?.reason
+		);
+	}
 
 	function isNoop(prev: TransferView | undefined, dto: TransferDto): boolean {
 		if (!prev) return false;
 		return (
 			prev.state === dto.state &&
 			(prev.metadata?.ack_bytes ?? 0) === (dto.metadata?.ack_bytes ?? 0) &&
-			(prev.metadata?.total_bytes ?? 0) === (dto.metadata?.total_bytes ?? 0)
+			(prev.metadata?.total_bytes ?? 0) === (dto.metadata?.total_bytes ?? 0) &&
+			(!dto.transport || sameTransport(prev.transport, dto.transport))
 		);
 	}
 
@@ -66,8 +84,15 @@ export const useTransfersStore = defineStore('transfers', () => {
 		const view: TransferView = {
 			...dto,
 			metadata: dto.metadata ? { ...dto.metadata } : null,
+			transport: dto.transport ?? prev?.transport ?? null,
 			ui: prev?.ui ?? { consent_deadline: null, expired: false },
 		};
+
+		const notice = transportNotice(view.transport);
+		if (notice && !fallbackNotified.has(dto.id)) {
+			fallbackNotified.add(dto.id);
+			useToastStore().addToast(notice, ToastType.Info);
+		}
 
 		if (dto.state === 'WaitingForUserConsent' && prev?.state !== 'WaitingForUserConsent') {
 			view.ui = { consent_deadline: Date.now() + QSD_CONSENT_TIMEOUT_MS, expired: false };
@@ -103,6 +128,7 @@ export const useTransfersStore = defineStore('transfers', () => {
 
 	function clear(id: string) {
 		clearExpiry(id);
+		fallbackNotified.delete(id);
 		items.value.delete(id);
 	}
 

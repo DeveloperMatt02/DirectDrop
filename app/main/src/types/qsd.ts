@@ -64,12 +64,27 @@ export interface TransferMetadataDto {
 	ack_bytes: number;
 }
 
+/** Transfer link (from TransportInfo), slowest to fastest by measured speed. */
+export type TransportMediumDto = 'Ble' | 'BleL2cap' | 'WifiLan' | 'WifiHotspot' | 'WifiDirect';
+
+/** `reason`: stable code (helper_missing, link_start_failed, peer_join_failed, timeout,
+ *  no_offer, peer_unsupported); `reason_text`: readable text from the core. */
+export interface TransportDto {
+	medium: TransportMediumDto;
+	expected: TransportMediumDto;
+	is_fallback: boolean;
+	reason: string | null;
+	reason_text: string | null;
+}
+
 /** Event qsd://transfer (from Message::Client). */
 export interface TransferDto {
 	id: string;
 	kind: TransferKindDto;
 	state: TransferStateDto;
 	metadata: TransferMetadataDto | null;
+	/** Additive: absent/null = link not known (the store keeps the latest one). */
+	transport?: TransportDto | null;
 }
 
 /** Event qsd://endpoints (from EndpointInfo). */
@@ -185,6 +200,25 @@ export const HANDSHAKE_STATES: ReadonlySet<TransferStateDto> = new Set([
 	'SentPairedKeyResult',
 	'ReceivedPairedKeyResult',
 ]);
+
+const TRANSPORT_LABELS: Record<TransportMediumDto, string> = {
+	Ble: 'Bluetooth',
+	BleL2cap: 'Bluetooth',
+	WifiLan: 'Wi-Fi LAN',
+	WifiHotspot: 'Wi-Fi hotspot',
+	WifiDirect: 'Wi-Fi Direct',
+};
+
+export function transportLabel(medium: TransportMediumDto): string {
+	return TRANSPORT_LABELS[medium];
+}
+
+/** Fallback notice ("Transfer on Bluetooth: Wi-Fi Direct unavailable — …"), null if not a fallback. */
+export function transportNotice(t: TransportDto | null | undefined): string | null {
+	if (!t?.is_fallback) return null;
+	const head = `Transfer on ${transportLabel(t.medium)}: ${transportLabel(t.expected)} unavailable`;
+	return t.reason_text ? `${head} — ${t.reason_text}` : head;
+}
 
 export function isTerminalState(state: TransferStateDto): boolean {
 	return TERMINAL_STATES.has(state);

@@ -133,6 +133,28 @@ pub struct TransferMetadataDto {
     pub ack_bytes: u64,
 }
 
+/// Mezzo del trasferimento (da `TransportMedium`), in ordine di velocita' misurata.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TransportMediumDto {
+    Ble,
+    BleL2cap,
+    WifiLan,
+    WifiHotspot,
+    WifiDirect,
+}
+
+/// Link in uso (da `TransportInfo`). `reason`: codice stabile
+/// (`helper_missing`, `link_start_failed`, `peer_join_failed`, `timeout`,
+/// `no_offer`, `peer_unsupported`); `reason_text`: testo leggibile dal core.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TransportDto {
+    pub medium: TransportMediumDto,
+    pub expected: TransportMediumDto,
+    pub is_fallback: bool,
+    pub reason: Option<String>,
+    pub reason_text: Option<String>,
+}
+
 /// Evento `qsd://transfer` (da `Message::Client`).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransferDto {
@@ -140,6 +162,9 @@ pub struct TransferDto {
     pub kind: TransferKindDto,
     pub state: TransferStateDto,
     pub metadata: Option<TransferMetadataDto>,
+    /// Additivo: assente/null = mezzo non noto (la GUI tiene l'ultimo ricevuto).
+    #[serde(default)]
+    pub transport: Option<TransportDto>,
 }
 
 /// Evento `qsd://endpoints` (da `EndpointInfo`).
@@ -264,6 +289,7 @@ impl From<anyhow::Error> for GuiError {
 
 use rqs_lib::channel::{ChannelMessage, Message, MessageClient, TransferAction, TransferKind};
 use rqs_lib::hdl::info::{TransferMetadata, TransferPayload, TransferPayloadKind};
+use rqs_lib::hdl::{TransportInfo, TransportMedium};
 use rqs_lib::{DeviceType, EndpointInfo, OutboundPayload, SendInfo, TransferState, Visibility};
 use rqs_lib::utils::RemoteDeviceInfo;
 
@@ -405,6 +431,30 @@ impl From<&TransferMetadata> for TransferMetadataDto {
     }
 }
 
+impl From<TransportMedium> for TransportMediumDto {
+    fn from(m: TransportMedium) -> Self {
+        match m {
+            TransportMedium::Ble => Self::Ble,
+            TransportMedium::BleL2cap => Self::BleL2cap,
+            TransportMedium::WifiLan => Self::WifiLan,
+            TransportMedium::WifiHotspot => Self::WifiHotspot,
+            TransportMedium::WifiDirect => Self::WifiDirect,
+        }
+    }
+}
+
+impl From<&TransportInfo> for TransportDto {
+    fn from(t: &TransportInfo) -> Self {
+        Self {
+            medium: t.medium.into(),
+            expected: t.expected.into(),
+            is_fallback: t.is_fallback,
+            reason: t.reason.as_ref().map(|r| r.code().to_string()),
+            reason_text: t.reason.as_ref().map(|r| r.to_string()),
+        }
+    }
+}
+
 impl TransferDto {
     /// `None` per `Message::Lib` (il core emette solo `Client`; `Lib` si
     /// costruisce solo in ingresso da `ConsentDto`).
@@ -418,6 +468,7 @@ impl TransferDto {
             kind: mc.kind.clone().into(),
             state: mc.state.clone().map(TransferStateDto::from).unwrap_or(TransferStateDto::Initial),
             metadata: mc.metadata.as_ref().map(TransferMetadataDto::from),
+            transport: mc.transport.as_ref().map(TransportDto::from),
         })
     }
 }
@@ -564,6 +615,7 @@ mod tests {
                 total_bytes: 38210432,
                 ack_bytes: 0,
             }),
+            transport: None,
         };
         let json = serde_json::to_value(&dto).unwrap();
         assert_eq!(json["pin_code"].as_str(), None);
@@ -581,5 +633,52 @@ mod tests {
             cm.msg,
             Message::Lib { action: TransferAction::ConsentAccept }
         ));
+    }
+
+    #[test]
+    fn transport_from_core_and_roundtrip() {
+        use rqs_lib::hdl::TransportReason;
+        let core = TransportInfo::new(
+            TransportMedium::Ble,
+            TransportMedium::WifiDirect,
+            Some(TransportReason::PeerJoinFailed),
+        );
+        let dto = TransportDto::from(&core);
+        assert_eq!(dto.medium, TransportMediumDto::Ble);
+        assert_eq!(dto.expected, TransportMediumDto::WifiDirect);
+        assert!(dto.is_fallback);
+        assert_eq!(dto.reason.as_deref(), Some("peer_join_failed"));
+        assert_eq!(dto.reason_text.as_deref(), Some("the phone couldn't join the Wi-Fi link"));
+        let json = serde_json::to_string(&dto).unwrap();
+        let back: TransportDto = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, dto);
+
+        let cm = ChannelMessage {
+            id: "ble-1".into(),
+            msg: Message::Client(MessageClient {
+                kind: TransferKind::Inbound,
+                state: Some(TransferState::ReceivingFiles),
+                metadata: None,
+                transport: Some(core),
+            }),
+        };
+        let t = TransferDto::from_channel(&cm).unwrap();
+        assert_eq!(t.transport, Some(dto));
+    }
+
+    #[test]
+    fn transport_snapshot_and_absent_field() {
+        let snap: serde_json::Value =
+            serde_json::from_str(include_str!("dto_snapshot.json")).unwrap();
+        // Il fixture col trasporto fa round-trip identico.
+        let fixture = snap["transfer_transport_fallback"].clone();
+        let dto: TransferDto = serde_json::from_value(fixture.clone()).unwrap();
+        let t = dto.transport.as_ref().unwrap();
+        assert_eq!(t.medium, TransportMediumDto::Ble);
+        assert!(t.is_fallback);
+        assert_eq!(serde_json::to_value(&dto).unwrap(), fixture);
+        // Wire senza `transport` (messaggi vecchi): campo None.
+        let old: TransferDto = serde_json::from_value(snap["transfer_consent"].clone()).unwrap();
+        assert_eq!(old.transport, None);
     }
 }
