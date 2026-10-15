@@ -87,6 +87,7 @@ async fn main() -> Result<(), anyhow::Error> {
             cmds::qsd_get_hostname,
             cmds::get_hostname,
             cmds::change_download_path,
+            cmds::qsd_open_path,
         ])
         .setup(|app| {
             // Setting up logging inside file for the app
