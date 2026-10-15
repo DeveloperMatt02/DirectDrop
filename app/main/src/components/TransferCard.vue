@@ -253,14 +253,14 @@ defineExpose({ openFile, openFolder, openTarget });
 			<div class="flex justify-end gap-2 mt-2">
 				<template v-if="meta?.payload_kind === 'Files'">
 					<button
-						v-if="files.length === 1"
+						v-if="t.kind === 'Inbound' && files.length === 1"
 						type="button"
 						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
 						@click="openFile">
 						OPEN FILE
 					</button>
 					<button
-						v-if="files.length > 0"
+						v-if="t.kind === 'Inbound' && files.length > 0"
 						type="button"
 						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
 						@click="openFolder">

@@ -6,12 +6,12 @@ import TransferCard from './TransferCard.vue';
 const transfers = useTransfersStore();
 
 const connecting = computed(() =>
-	[...transfers.items.values()].filter((t) =>
+	transfers.sortedItems.filter((t) =>
 		!['SentIntroduction', 'SendingFiles', 'ReceivingFiles', 'Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)
 		&& (t.state !== 'WaitingForUserConsent' || t.kind === 'Outbound')),
 );
 const done = computed(() =>
-	[...transfers.items.values()].filter((t) => ['Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)),
+	transfers.sortedItems.filter((t) => ['Finished', 'Cancelled', 'Rejected', 'Disconnected'].includes(t.state)),
 );
 </script>
 
