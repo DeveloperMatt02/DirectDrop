@@ -179,13 +179,18 @@ async fn main() -> Result<(), anyhow::Error> {
                 trace!("RunEvent::Ready");
                 if get_startminimized(app_handle) {
                     #[cfg(not(target_os = "macos"))]
-                    app_handle
-                        .get_webview_window("main")
-                        .unwrap()
-                        .hide()
-                        .unwrap();
+                    match app_handle.get_webview_window("main") {
+                        Some(w) => {
+                            if let Err(e) = w.hide() {
+                                error!("start minimized: hide failed: {e}");
+                            }
+                        }
+                        None => error!("start minimized: no main window found"),
+                    }
                     #[cfg(target_os = "macos")]
-                    app_handle.hide().unwrap();
+                    if let Err(e) = app_handle.hide() {
+                        error!("start minimized: hide failed: {e}");
+                    }
                 }
             }
             tauri::RunEvent::ExitRequested { code, .. } => {
@@ -214,8 +219,12 @@ fn handle_window_event(w: &Window, event: &WindowEvent) {
         }
 
         trace!("handle_window_event: prevent close");
-        w.hide().unwrap();
-        api.prevent_close();
+        match w.hide() {
+            Ok(()) => api.prevent_close(),
+            // Never a dead X: if the window can't hide, let the close go
+            // through (ExitRequested -> kill_app) instead of panicking.
+            Err(e) => error!("handle_window_event: hide failed, closing instead: {e}"),
+        }
     }
 }
 
@@ -235,7 +244,11 @@ fn kill_app(app_handle: &AppHandle) {
     tokio::task::block_in_place(|| {
         #[allow(clippy::await_holding_lock)]
         tauri::async_runtime::block_on(async move {
-            let _ = state.rqs.lock().unwrap().stop().await;
+            let mut rqs = state.rqs.lock().unwrap_or_else(|e| {
+                error!("kill_app: state lock poisoned, stopping anyway");
+                e.into_inner()
+            });
+            let _ = rqs.stop().await;
         });
     });
 
