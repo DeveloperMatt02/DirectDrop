@@ -23,6 +23,27 @@ export function startOfLocalDay(ts: number): number {
 	return d.getTime();
 }
 
+/**
+ * Average speed of an ended transfer: total bytes over endedAt − startedAt.
+ * Client-side timestamps, so the handshake (and consent wait) is included:
+ * an approximation. Null when not ended, empty, or not longer than 1 s.
+ */
+export function avgSpeedBps(totalBytes: number, timing: TransferTiming | undefined): number | null {
+	if (!timing || timing.endedAt === null || !(totalBytes > 0)) return null;
+	const ms = timing.endedAt - timing.startedAt;
+	if (ms <= 1000) return null;
+	return totalBytes / (ms / 1000);
+}
+
+/** "14:05" for the day of `now`, "15/10 14:05" for other days (local time). */
+export function formatClock(ts: number, now: number): string {
+	const d = new Date(ts);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	if (startOfLocalDay(ts) === startOfLocalDay(now)) return time;
+	return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${time}`;
+}
+
 /** Inbound request waiting for Accept/Decline: shown above the list, not in a group. */
 export function isPendingConsent(t: TransferView): boolean {
 	return t.kind === 'Inbound' && t.state === 'WaitingForUserConsent';
