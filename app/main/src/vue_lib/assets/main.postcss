@@ -2,34 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme tokens. Light ("Carta chiara") is the default; dark ("Console calma")
+ * applies when the system prefers it, unless the Tauri window theme pins one
+ * via html[data-theme] (see composables/systemTheme.ts). Components use these
+ * only through the Tailwind colors in tailwind.config.cjs.
+ * Contrast tweaks vs the proposals: dark --qsd-faint #5f7287 -> #72869c and
+ * dark --qsd-primary #2b7fff -> #1f6fe6, both to reach 4.5:1.
+ */
 :root {
-	color-scheme: light dark;
-	--qsd-ground: #16181d;
-	--qsd-panel: #1e2128;
-	--qsd-raise: #262a33;
-	--qsd-ink: #e8eaf0;
-	--qsd-dim: #a7adba;
-	--qsd-seam: #2e333d;
-	--qsd-accent: #6ea8fe;
-	--qsd-accent-ink: #0b1220;
-	--qsd-ok: #3fb950;
-	--qsd-warn: #d29922;
-	--qsd-danger: #f85149;
+	color-scheme: light;
 	--qsd-radius-s: 6px;
 	--qsd-radius-m: 10px;
+	--qsd-ground: #f4f2ee;
+	--qsd-panel: #ffffff;
+	--qsd-raise: #ece8e0;
+	--qsd-seam: #e6e2da;
+	--qsd-ink: #1d2330;
+	--qsd-dim: #5b6472;
+	--qsd-faint: #5b6472;
+	--qsd-accent: #2f4fc2;
+	--qsd-accent-ink: #ffffff;
+	--qsd-accent-text: #2f4fc2;
+	--qsd-accent-soft: #e3e9fb;
+	--qsd-primary: #1d2330;
+	--qsd-primary-ink: #ffffff;
+	--qsd-rx: #0f7a52;
+	--qsd-rx-bg: #dff3ea;
+	--qsd-tx: #2f4fc2;
+	--qsd-tx-bg: #e3e9fb;
+	--qsd-cancel: #a3261a;
+	--qsd-cancel-bg: #fde4e1;
+	--qsd-cancel-border: #f3c4be;
+	--qsd-warn: #8a5a00;
+	--qsd-warn-bg: #fbf0d9;
+	--qsd-ok: #0f7a52;
+	--qsd-danger: #a3261a;
 }
 
-@media (prefers-color-scheme: light) {
-	:root {
-		--qsd-ground: #f4f5f7;
-		--qsd-panel: #ffffff;
-		--qsd-raise: #eceef3;
-		--qsd-ink: #1a1d23;
-		--qsd-dim: #5b6270;
-		--qsd-seam: #e0e3ea;
-		--qsd-accent: #0b5bd3;
-		--qsd-accent-ink: #ffffff;
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--qsd-ground: #0b1118;
+		--qsd-panel: #101923;
+		--qsd-raise: #121b25;
+		--qsd-seam: #1c2733;
+		--qsd-ink: #dbe4ee;
+		--qsd-dim: #7c8ea3;
+		--qsd-faint: #72869c;
+		--qsd-accent: #2b7fff;
+		--qsd-accent-ink: #0b1118;
+		--qsd-accent-text: #8fb7ff;
+		--qsd-accent-soft: #152b4b;
+		--qsd-primary: #1f6fe6;
+		--qsd-primary-ink: #ffffff;
+		--qsd-rx: #4fd1a5;
+		--qsd-rx-bg: #10382f;
+		--qsd-tx: #6aa8ff;
+		--qsd-tx-bg: #14304f;
+		--qsd-cancel: #ff9aa8;
+		--qsd-cancel-bg: #2a141a;
+		--qsd-cancel-border: #5a2b36;
+		--qsd-warn: #f0b45a;
+		--qsd-warn-bg: #2a2213;
+		--qsd-ok: #4fd1a5;
+		--qsd-danger: #ff9aa8;
 	}
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--qsd-ground: #0b1118;
+	--qsd-panel: #101923;
+	--qsd-raise: #121b25;
+	--qsd-seam: #1c2733;
+	--qsd-ink: #dbe4ee;
+	--qsd-dim: #7c8ea3;
+	--qsd-faint: #72869c;
+	--qsd-accent: #2b7fff;
+	--qsd-accent-ink: #0b1118;
+	--qsd-accent-text: #8fb7ff;
+	--qsd-accent-soft: #152b4b;
+	--qsd-primary: #1f6fe6;
+	--qsd-primary-ink: #ffffff;
+	--qsd-rx: #4fd1a5;
+	--qsd-rx-bg: #10382f;
+	--qsd-tx: #6aa8ff;
+	--qsd-tx-bg: #14304f;
+	--qsd-cancel: #ff9aa8;
+	--qsd-cancel-bg: #2a141a;
+	--qsd-cancel-border: #5a2b36;
+	--qsd-warn: #f0b45a;
+	--qsd-warn-bg: #2a2213;
+	--qsd-ok: #4fd1a5;
+	--qsd-danger: #ff9aa8;
 }
 
 html,
@@ -187,6 +253,74 @@ body,
 	border-color: var(--qsd-accent);
 }
 
+/* Row and panel actions: real buttons, 40px hit area. */
+.qsd-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 40px;
+	min-width: 40px;
+	padding: 0 14px;
+	border: 1px solid var(--qsd-seam);
+	border-radius: var(--qsd-radius-s);
+	background: var(--qsd-panel);
+	color: var(--qsd-ink);
+	font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+	transition: background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.qsd-action:hover:not(:disabled) {
+	background: var(--qsd-raise);
+	border-color: var(--qsd-dim);
+}
+.qsd-action:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+.qsd-action-primary {
+	background: var(--qsd-primary);
+	border-color: var(--qsd-primary);
+	color: var(--qsd-primary-ink);
+}
+.qsd-action-primary:hover:not(:disabled) {
+	background: var(--qsd-primary);
+	border-color: var(--qsd-primary);
+	filter: brightness(1.12);
+}
+.qsd-action-cancel {
+	background: transparent;
+	border-color: var(--qsd-cancel-border);
+	color: var(--qsd-cancel);
+}
+.qsd-action-cancel:hover:not(:disabled) {
+	background: var(--qsd-cancel-bg);
+	border-color: var(--qsd-cancel);
+}
+
+/* Sidebar radar: slow outward waves while the device is discoverable. */
+@keyframes radar-wave {
+	from {
+		transform: scale(0.3);
+		opacity: 0.6;
+	}
+	to {
+		transform: scale(1);
+		opacity: 0;
+	}
+}
+.radar-wave {
+	transform-origin: center;
+	transform-box: fill-box;
+	animation: radar-wave 4.8s ease-out infinite;
+}
+.radar-wave-late {
+	animation-delay: 2.4s;
+}
+
 @layer utilities {
 	.no-scrollbar::-webkit-scrollbar {
 		display: none;
@@ -245,5 +379,9 @@ body,
 	.radar-sweep,
 	.radar-ping {
 		animation: none;
+	}
+	.radar-wave {
+		animation: none;
+		opacity: 0;
 	}
 }
