@@ -92,13 +92,13 @@ async function setVisibility(v: VisibilityDto) {
 			</div>
 
 			<div
-				class="grid grid-cols-3 gap-1 p-1 flex-1 min-w-[260px] rounded-lg border border-seam bg-raise font-mono text-[12px]"
-				role="radiogroup" aria-label="Device visibility">
+				class="grid grid-cols-3 gap-1 p-1 flex-1 min-w-[260px] rounded-lg border border-seam bg-raise text-[12px] font-medium"
+				role="radiogroup" aria-label="Device visibility" data-test="visibility-selector">
 				<button
 					v-for="o in options" :key="o.value" type="button"
 					role="radio" :aria-checked="visibility === o.value"
-					class="min-h-[40px] px-2 rounded-md"
-					:class="visibility === o.value ? 'bg-accent-soft text-accent-text font-semibold' : 'text-dim hover:text-ink hover:bg-panel'"
+					class="min-w-0 min-h-[40px] px-1 rounded-md whitespace-nowrap"
+					:class="visibility === o.value ? 'bg-accent-soft text-accent-text' : 'text-dim hover:text-ink hover:bg-panel'"
 					@click="setVisibility(o.value)">
 					{{ o.label }}
 				</button>
