@@ -20,9 +20,9 @@ defineProps({
 
 <template>
 	<div
-		class="w-full p-4 rounded-xl shadow-md"
-		:class="{'bg-red-100': type === ToastType.Error, 'bg-green-100': type === ToastType.Success, 'bg-blue-100': type === ToastType.Info}">
-		<span class="text-sm text-gray-800">
+		class="w-full p-4 rounded-xl shadow-md border"
+		:class="{'bg-cancel-bg text-cancel border-cancel-border': type === ToastType.Error, 'bg-rx-bg text-rx border-seam': type === ToastType.Success, 'bg-accent-soft text-ink border-seam': type === ToastType.Info}">
+		<span class="text-sm">
 			{{ message }}
 		</span>
 	</div>

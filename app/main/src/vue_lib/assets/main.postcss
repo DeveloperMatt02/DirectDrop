@@ -38,6 +38,7 @@
 	--qsd-warn-bg: #fbf0d9;
 	--qsd-ok: #0f7a52;
 	--qsd-danger: #a3261a;
+	--qsd-overlay: rgb(29 35 48 / 0.35);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -67,6 +68,7 @@
 		--qsd-warn-bg: #2a2213;
 		--qsd-ok: #4fd1a5;
 		--qsd-danger: #ff9aa8;
+	--qsd-overlay: rgb(0 0 0 / 0.6);
 	}
 }
 
@@ -96,6 +98,7 @@
 	--qsd-warn-bg: #2a2213;
 	--qsd-ok: #4fd1a5;
 	--qsd-danger: #ff9aa8;
+	--qsd-overlay: rgb(0 0 0 / 0.6);
 }
 
 html,
@@ -333,7 +336,7 @@ body,
 
 /* Blueprint schematic layer (pinned user direction, overrides quiet-console restraint) */
 .bp-dots {
-	background-image: radial-gradient(#1e293b 1px, transparent 1px);
+	background-image: radial-gradient(var(--qsd-seam) 1px, transparent 1px);
 	background-size: 16px 16px;
 }
 
@@ -369,7 +372,7 @@ body,
 }
 
 .bp-sketch {
-	border: 2px solid #fb923c;
+	border: 2px solid var(--qsd-accent);
 	border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
 }
 

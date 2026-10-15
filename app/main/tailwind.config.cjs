@@ -47,6 +47,7 @@ module.exports = {
 					DEFAULT: v('warn'),
 					bg: v('warn-bg'),
 				},
+				overlay: v('overlay'),
 			},
 		},
 	},
