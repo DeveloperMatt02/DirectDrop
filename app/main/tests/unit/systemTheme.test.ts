@@ -213,4 +213,34 @@ describe('syncSystemTheme source priority: portal, then Tauri theme(), then medi
 		await done;
 		expect(root.dataset.theme).toBe('dark');
 	});
+
+	test('the backend set_theme echo (media query flips too) converges in either order, without loops', async () => {
+		// After set_theme the media query and theme() follow the portal (GTK prefer-dark).
+		let gtkDark = true;
+		const theme = vi.fn(async (): Promise<SystemTheme> => (gtkDark ? 'dark' : 'light'));
+		const root = fakeRoot();
+		const sys = fakeEnv(true);
+		const p = fakePortal(async () => 'dark');
+		await syncSystemTheme(fakeWindow(theme).win, { root, env: sys.env, portal: p.portal });
+		expect(root.dataset.theme).toBe('dark');
+		theme.mockClear();
+
+		// Desktop -> no preference: the media query change lands before the portal event.
+		gtkDark = false;
+		sys.flip(false);
+		await settle();
+		p.change(null);
+		await settle();
+		expect(root.dataset.theme).toBe('light');
+		expect(theme.mock.calls.length).toBeLessThanOrEqual(1);
+
+		// Desktop -> dark: portal event first, then the media query echo.
+		theme.mockClear();
+		p.change('dark');
+		gtkDark = true;
+		sys.flip(true);
+		await settle();
+		expect(root.dataset.theme).toBe('dark');
+		expect(theme).not.toHaveBeenCalled();
+	});
 });

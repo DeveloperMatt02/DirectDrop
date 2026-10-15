@@ -80,6 +80,10 @@ export interface ThemeOptions {
  * GTK theme name, as does WebKitGTK's media query: GNOME's "prefer-dark"
  * with Adwaita only shows up through the portal. theme() is re-read on every
  * prefers-color-scheme change and on window focus.
+ *
+ * The backend also pushes the portal value to the window (set_theme), which
+ * flips the media query and theme() to match. That echo only re-runs
+ * resolve(), which never writes back to the window, so it cannot loop.
  */
 export async function syncSystemTheme(win: ThemeSource, opts: ThemeOptions = {}): Promise<UnlistenFn> {
 	const root = opts.root ?? document.documentElement;

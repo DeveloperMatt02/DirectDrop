@@ -6,6 +6,11 @@
 //! `qsd_system_theme` at startup and follows `qsd://system-theme` on changes.
 //! Any portal failure only logs a warning: the GUI keeps its fallback chain
 //! (Tauri `theme()`, then the media query). Other OSes: always no preference.
+//!
+//! The portal value is also pushed to the "main" window with `set_theme`, so
+//! the GTK title bar (drawn from GTK settings, not from the page) follows it;
+//! on Linux that sets gtk-application-prefer-dark-theme, which WebKitGTK's
+//! media query and tao's `theme()` read too, so all sources then agree.
 
 use serde::Serialize;
 use tauri::AppHandle;
@@ -29,6 +34,16 @@ fn theme_from_color_scheme(value: u32) -> Option<&'static str> {
     }
 }
 
+/// Window theme for a portal value; None = follow the GTK theme again.
+#[cfg(any(target_os = "linux", test))]
+fn window_theme(theme: Option<&str>) -> Option<tauri::Theme> {
+    match theme {
+        Some("dark") => Some(tauri::Theme::Dark),
+        Some("light") => Some(tauri::Theme::Light),
+        _ => None,
+    }
+}
+
 #[cfg(target_os = "linux")]
 mod portal {
     use std::future::Future;
@@ -36,9 +51,9 @@ mod portal {
 
     use ashpd::desktop::settings::{Settings, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY};
     use ashpd::zbus::export::futures_util::StreamExt;
-    use tauri::{AppHandle, Emitter};
+    use tauri::{AppHandle, Emitter, Manager};
 
-    use super::{theme_from_color_scheme, SystemThemeEvent, EVT_SYSTEM_THEME};
+    use super::{theme_from_color_scheme, window_theme, SystemThemeEvent, EVT_SYSTEM_THEME};
 
     const PORTAL_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -62,6 +77,10 @@ mod portal {
 
     pub async fn read() -> Option<&'static str> {
         let settings = call("settings portal", Settings::new()).await?;
+        read_with(&settings).await
+    }
+
+    async fn read_with(settings: &Settings<'_>) -> Option<&'static str> {
         let value = call(
             "color-scheme read",
             settings.read::<u32>(APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY),
@@ -70,11 +89,26 @@ mod portal {
         theme_from_color_scheme(value)
     }
 
+    /// Title bar and GTK settings follow the portal; errors are only logged.
+    fn apply_to_window(app: &AppHandle, theme: Option<&str>) {
+        let Some(window) = app.get_webview_window("main") else {
+            warn!("system theme: no main window to theme");
+            return;
+        };
+        if let Err(e) = window.set_theme(window_theme(theme)) {
+            warn!("system theme: set_theme failed: {e}");
+        }
+    }
+
     pub fn spawn_watch(app: AppHandle) {
         tauri::async_runtime::spawn(async move {
             let Some(settings) = call("settings portal", Settings::new()).await else {
                 return;
             };
+            // Startup value: a failed read leaves the window on the GTK theme.
+            if let Some(theme) = read_with(&settings).await {
+                apply_to_window(&app, Some(theme));
+            }
             let Some(stream) = call(
                 "color-scheme subscription",
                 settings.receive_setting_changed_with_args::<u32>(
@@ -90,9 +124,9 @@ mod portal {
             while let Some(item) = stream.next().await {
                 match item {
                     Ok(value) => {
-                        let evt = SystemThemeEvent {
-                            theme: theme_from_color_scheme(value),
-                        };
+                        let theme = theme_from_color_scheme(value);
+                        apply_to_window(&app, theme);
+                        let evt = SystemThemeEvent { theme };
                         if let Err(e) = app.emit(EVT_SYSTEM_THEME, evt) {
                             warn!("system theme: emit failed: {e}");
                         }
@@ -129,7 +163,7 @@ pub fn spawn_system_theme_watch(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::theme_from_color_scheme;
+    use super::{theme_from_color_scheme, window_theme};
 
     #[test]
     fn color_scheme_values() {
@@ -137,5 +171,13 @@ mod tests {
         assert_eq!(theme_from_color_scheme(1), Some("dark"));
         assert_eq!(theme_from_color_scheme(2), Some("light"));
         assert_eq!(theme_from_color_scheme(7), None);
+    }
+
+    #[test]
+    fn window_theme_values() {
+        assert_eq!(window_theme(Some("dark")), Some(tauri::Theme::Dark));
+        assert_eq!(window_theme(Some("light")), Some(tauri::Theme::Light));
+        assert_eq!(window_theme(None), None);
+        assert_eq!(window_theme(Some("sepia")), None);
     }
 }
