@@ -160,7 +160,7 @@ impl ReceiverGattServer {
             tokio::time::Instant::now() + GATT_CHECK_INTERVAL,
             GATT_CHECK_INTERVAL,
         );
-        let mut missing = 0;
+        let mut watch = ServiceWatch::default();
         loop {
             tokio::select! {
                 _ = ctk.cancelled() => break,
@@ -168,20 +168,29 @@ impl ReceiverGattServer {
                     // Bluetooth switched off by the user: wait, a restart would power it on again.
                     match self.adapter.is_powered().await {
                         Ok(false) => {
-                            missing = 0;
+                            watch.missing = 0;
                             continue;
                         }
                         Ok(true) => {}
                         Err(e) => return Err(anyhow::anyhow!("adapter gone: {e}")),
                     }
-                    match self.adapter.uuids().await {
-                        Ok(Some(uuids)) if uuids.contains(&service) => missing = 0,
-                        // Twice in a row, in case BlueZ was still updating the list.
-                        Ok(_) => missing += 1,
-                        Err(e) => return Err(anyhow::anyhow!("adapter gone: {e}")),
+                    if !watch.enabled {
+                        continue;
                     }
-                    if missing >= 2 {
-                        return Err(anyhow::anyhow!("GATT service no longer registered"));
+                    let listed = match self.adapter.uuids().await {
+                        Ok(uuids) => uuids.is_some_and(|u| u.contains(&service)),
+                        Err(e) => return Err(anyhow::anyhow!("adapter gone: {e}")),
+                    };
+                    match watch.observe(listed) {
+                        WatchVerdict::Ok => {}
+                        WatchVerdict::Lost => {
+                            return Err(anyhow::anyhow!("GATT service no longer registered"));
+                        }
+                        WatchVerdict::Unreliable => warn!(
+                            "{INNER_NAME}: service 0x{QS_GATT_SERVICE:04X} never listed among the \
+                             adapter's UUIDs, no longer checking it (restarts only if the adapter \
+                             goes away)"
+                        ),
                     }
                 }
             }
@@ -375,4 +384,81 @@ async fn weave_session(
         }
     }
     info!("{INNER_NAME}: weave: session ended");
+}
+
+#[derive(Debug, PartialEq)]
+enum WatchVerdict {
+    Ok,
+    /// Listed before, missing now: BlueZ dropped the application, register it again.
+    Lost,
+    /// Never listed since the registration: the check doesn't work on this system and would
+    /// restart the server in a loop, so it turns itself off.
+    Unreliable,
+}
+
+/// Watches whether the GATT service is listed among the adapter's UUIDs.
+#[derive(Debug)]
+struct ServiceWatch {
+    enabled: bool,
+    seen: bool,
+    missing: u32,
+}
+
+impl Default for ServiceWatch {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            seen: false,
+            missing: 0,
+        }
+    }
+}
+
+impl ServiceWatch {
+    fn observe(&mut self, listed: bool) -> WatchVerdict {
+        if listed {
+            self.seen = true;
+            self.missing = 0;
+            return WatchVerdict::Ok;
+        }
+        // Twice in a row, in case BlueZ was still updating the list.
+        self.missing += 1;
+        if self.missing < 2 {
+            WatchVerdict::Ok
+        } else if self.seen {
+            WatchVerdict::Lost
+        } else {
+            self.enabled = false;
+            WatchVerdict::Unreliable
+        }
+    }
+}
+
+#[cfg(test)]
+mod service_watch_tests {
+    use super::{ServiceWatch, WatchVerdict};
+
+    #[test]
+    fn lost_after_being_listed_restarts() {
+        let mut w = ServiceWatch::default();
+        assert_eq!(w.observe(true), WatchVerdict::Ok);
+        assert_eq!(w.observe(false), WatchVerdict::Ok);
+        assert_eq!(w.observe(false), WatchVerdict::Lost);
+    }
+
+    #[test]
+    fn a_single_miss_is_tolerated() {
+        let mut w = ServiceWatch::default();
+        for listed in [true, false, true, false, true] {
+            assert_eq!(w.observe(listed), WatchVerdict::Ok);
+        }
+    }
+
+    #[test]
+    fn never_listed_turns_the_check_off_instead_of_restarting() {
+        let mut w = ServiceWatch::default();
+        assert_eq!(w.observe(false), WatchVerdict::Ok);
+        assert_eq!(w.observe(false), WatchVerdict::Unreliable);
+        assert!(!w.enabled);
+    }
 }
