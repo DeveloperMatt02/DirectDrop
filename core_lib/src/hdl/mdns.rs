@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::anyhow;
-use mdns_sd::{AddrType, ServiceDaemon, ServiceInfo};
+use mdns_sd::{AddrType, DaemonEvent, ServiceDaemon, ServiceInfo};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::watch;
 use tokio::time::{Instant, interval_at};
@@ -13,6 +13,7 @@ use crate::utils::{DeviceType, gen_mdns_endpoint_info, gen_mdns_name};
 
 const INNER_NAME: &str = "MDnsServer";
 const TICK_INTERVAL: Duration = Duration::from_secs(60);
+const SUSPEND_CHECK: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Visibility {
@@ -62,7 +63,7 @@ impl MDnsServer {
 
     /// Runs until `ctk` is cancelled. Returns an error when the mDNS daemon is gone (its thread
     /// panics on some malformed packets, see `dns_parser.rs` in mdns-sd: unchecked slicing on
-    /// RDLENGTH): the caller then starts over with a new `MDnsServer`.
+    /// RDLENGTH) or after a suspend: the caller then starts over with a new `MDnsServer`.
     pub async fn run(&mut self, ctk: CancellationToken) -> Result<(), anyhow::Error> {
         info!("{INNER_NAME}: service starting");
         let monitor = self.daemon.monitor()?;
@@ -72,6 +73,8 @@ impl MDnsServer {
             self.announce();
         }
         let mut interval = interval_at(Instant::now() + TICK_INTERVAL, TICK_INTERVAL);
+        let mut suspend_check = interval_at(Instant::now() + SUSPEND_CHECK, SUSPEND_CHECK);
+        let (mut wall, mut mono) = (SystemTime::now(), Instant::now());
 
         loop {
             tokio::select! {
@@ -81,6 +84,16 @@ impl MDnsServer {
                 }
                 r = monitor.recv_async() => {
                     match r {
+                        // The daemon adds a new address to the service but only announces it
+                        // when asked: announce on the new interface (Wi-Fi back after a transfer
+                        // over Wi-Fi Direct or the hotspot, NetworkManager reconnecting).
+                        Ok(DaemonEvent::IpAdd(ip)) => {
+                            if visibility != Visibility::Invisible {
+                                debug!("{INNER_NAME}: new address {ip}, announcing again");
+                                self.announce();
+                            }
+                        }
+                        Ok(DaemonEvent::Error(e)) => warn!("{INNER_NAME}: daemon: {e}"),
                         Ok(_) => continue,
                         Err(_) => return Err(anyhow!("mDNS daemon stopped")),
                     }
@@ -123,6 +136,16 @@ impl MDnsServer {
 
                     self.withdraw().await;
                     let _ = self.visibility_sender.lock().unwrap().send(Visibility::Invisible);
+                }
+                _ = suspend_check.tick() => {
+                    // The monotonic clock stops during a suspend, the wall clock doesn't. After a
+                    // resume the interfaces may be new while the daemon still holds the sockets
+                    // (and multicast memberships) of the old ones: start over with a new daemon.
+                    let slept = wall.elapsed().unwrap_or_default().saturating_sub(mono.elapsed());
+                    (wall, mono) = (SystemTime::now(), Instant::now());
+                    if slept > SUSPEND_CHECK {
+                        return Err(anyhow!("resumed after ~{}s of suspend", slept.as_secs()));
+                    }
                 }
             }
         }
