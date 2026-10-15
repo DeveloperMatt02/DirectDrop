@@ -1,4 +1,5 @@
-import type { UnlistenFn } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 export type SystemTheme = 'light' | 'dark';
 
@@ -8,14 +9,38 @@ export interface ThemeSource {
 	onThemeChanged(handler: (event: { payload: SystemTheme }) => void): Promise<UnlistenFn>;
 }
 
+/** Desktop color-scheme setting (freedesktop portal); null = no preference. */
+export interface PortalThemeSource {
+	read(): Promise<SystemTheme | null>;
+	onChanged(handler: (theme: SystemTheme | null) => void): Promise<UnlistenFn>;
+}
+
+/** Backend event for portal changes (src-tauri cmds/system_theme.rs). */
+export const QSD_SYSTEM_THEME_EVENT = 'qsd://system-theme';
+
 export const THEME_TIMEOUT_MS = 1500;
+/** The backend bounds each portal call to 2 s (connect + read). */
+export const PORTAL_TIMEOUT_MS = 5000;
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`theme() timed out after ${ms} ms`)), ms);
+		timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
 	});
 	return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
+function asTheme(v: unknown): SystemTheme | null {
+	return v === 'dark' || v === 'light' ? v : null;
+}
+
+/** Portal source backed by the qsd_system_theme command and qsd://system-theme. */
+export function tauriPortal(): PortalThemeSource {
+	return {
+		read: async () => asTheme(await invoke<string | null>('qsd_system_theme')),
+		onChanged: (handler) =>
+			listen<{ theme: string | null }>(QSD_SYSTEM_THEME_EVENT, (e) => handler(asTheme(e.payload?.theme))),
+	};
 }
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -36,23 +61,32 @@ function browserEnv(): ThemeEnv {
 	};
 }
 
+export interface ThemeOptions {
+	root?: HTMLElement;
+	timeoutMs?: number;
+	portalTimeoutMs?: number;
+	env?: ThemeEnv;
+	/** Desktop setting; null/absent = skip straight to the Tauri theme. */
+	portal?: PortalThemeSource | null;
+}
+
 /**
- * Follows the window theme reported by Tauri by setting html[data-theme].
- * The Tauri value wins; if theme() fails, times out or returns null,
- * data-theme is removed and the CSS prefers-color-scheme sets apply.
+ * Sets html[data-theme] from, in order: the desktop color-scheme setting
+ * (portal), Tauri's window theme(), and otherwise nothing, so the CSS
+ * prefers-color-scheme sets apply. A portal "no preference" (or a missing
+ * portal) falls through to the next source.
  *
  * On Linux tao (0.31) never emits ThemeChanged and theme() only looks at the
- * GTK theme name, so theme() is re-read on every prefers-color-scheme change
- * and on window focus; reading it once at startup pinned the first value
- * until a restart. GNOME's color-scheme setting (Adwaita + "prefer-dark")
- * reaches neither theme() nor WebKitGTK's media query.
+ * GTK theme name, as does WebKitGTK's media query: GNOME's "prefer-dark"
+ * with Adwaita only shows up through the portal. theme() is re-read on every
+ * prefers-color-scheme change and on window focus.
  */
-export async function syncSystemTheme(
-	win: ThemeSource,
-	root: HTMLElement = document.documentElement,
-	timeoutMs: number = THEME_TIMEOUT_MS,
-	env: ThemeEnv = browserEnv(),
-): Promise<UnlistenFn> {
+export async function syncSystemTheme(win: ThemeSource, opts: ThemeOptions = {}): Promise<UnlistenFn> {
+	const root = opts.root ?? document.documentElement;
+	const timeoutMs = opts.timeoutMs ?? THEME_TIMEOUT_MS;
+	const env = opts.env ?? browserEnv();
+	const portal = opts.portal ?? null;
+
 	let lastMismatch = '';
 	const apply = (theme: SystemTheme | null) => {
 		if (theme !== 'light' && theme !== 'dark') {
@@ -63,15 +97,21 @@ export async function syncSystemTheme(
 		const media = env.media ? (env.media.matches ? 'dark' : 'light') : theme;
 		const mismatch = media !== theme ? `${theme}/${media}` : '';
 		if (mismatch && mismatch !== lastMismatch) {
-			console.info(`[theme] Tauri reports ${theme}, prefers-color-scheme reports ${media}; using ${theme}`);
+			console.info(`[theme] using ${theme}, prefers-color-scheme reports ${media}`);
 		}
 		lastMismatch = mismatch;
 	};
 
-	// Only the newest read may apply (an older, slower theme() must not win).
+	/** Latest desktop setting; when set it wins over everything else. */
+	let portalTheme: SystemTheme | null = null;
+	// Only the newest resolution may apply (an older, slower theme() must not win).
 	let seq = 0;
-	const refresh = async () => {
+	const resolve = async () => {
 		const mine = ++seq;
+		if (portalTheme) {
+			apply(portalTheme);
+			return;
+		}
 		try {
 			const theme = await withTimeout(win.theme(), timeoutMs);
 			if (mine === seq) apply(theme);
@@ -81,24 +121,50 @@ export async function syncSystemTheme(
 		}
 	};
 
-	let unlistenTauri: UnlistenFn | null = null;
+	const unlisteners: UnlistenFn[] = [];
+	let portalRead: Promise<void> | null = null;
+	if (portal) {
+		let changed = false;
+		try {
+			unlisteners.push(await portal.onChanged((theme) => {
+				changed = true;
+				portalTheme = theme;
+				void resolve();
+			}));
+		} catch (e) {
+			console.warn('[theme] portal events unavailable', e);
+		}
+		portalRead = withTimeout(portal.read(), opts.portalTimeoutMs ?? PORTAL_TIMEOUT_MS).then(
+			(theme) => {
+				// A change event that arrived meanwhile is newer than this read.
+				if (!changed) portalTheme = theme;
+			},
+			(e) => console.warn('[theme] portal unavailable, using the window theme', e),
+		);
+	}
 	try {
-		unlistenTauri = await win.onThemeChanged((event) => {
+		unlisteners.push(await win.onThemeChanged((event) => {
+			if (portalTheme) return;
 			seq += 1;
 			apply(event.payload);
-		});
+		}));
 	} catch (e) {
 		console.warn('[theme] onThemeChanged unavailable', e);
 	}
 	const onChange = () => {
-		void refresh();
+		void resolve();
 	};
 	env.media?.addEventListener('change', onChange);
 	env.focus?.addEventListener('focus', onChange);
-	await refresh();
+	// Fallback chain right away, then the portal value once it answers.
+	await resolve();
+	if (portalRead) {
+		await portalRead;
+		if (portalTheme) await resolve();
+	}
 
 	return () => {
-		unlistenTauri?.();
+		unlisteners.forEach((fn) => fn());
 		env.media?.removeEventListener('change', onChange);
 		env.focus?.removeEventListener('focus', onChange);
 	};

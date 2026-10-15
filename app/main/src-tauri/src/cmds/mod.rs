@@ -18,3 +18,5 @@ mod settings;
 pub use settings::*;
 mod open_path;
 pub use open_path::*;
+mod system_theme;
+pub use system_theme::*;

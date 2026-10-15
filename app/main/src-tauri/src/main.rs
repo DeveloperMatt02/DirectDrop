@@ -88,6 +88,7 @@ async fn main() -> Result<(), anyhow::Error> {
             cmds::get_hostname,
             cmds::change_download_path,
             cmds::qsd_open_path,
+            cmds::qsd_system_theme,
         ])
         .setup(|app| {
             // Setting up logging inside file for the app
@@ -167,6 +168,7 @@ async fn main() -> Result<(), anyhow::Error> {
             });
 
             spawn_receiver_tasks(app.app_handle());
+            cmds::spawn_system_theme_watch(app.app_handle());
             Ok(())
         })
         .on_window_event(handle_window_event)

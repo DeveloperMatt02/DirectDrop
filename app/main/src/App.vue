@@ -9,7 +9,7 @@ import StatusHeader from './components/StatusHeader.vue';
 import TransferCard from './components/TransferCard.vue';
 import TransferQueue from './components/TransferQueue.vue';
 import SettingsDrawer from './composables/SettingsDrawer.vue';
-import { syncSystemTheme } from './composables/systemTheme';
+import { syncSystemTheme, tauriPortal } from './composables/systemTheme';
 import { ToastNotification } from './vue_lib';
 import { useToastStore } from './vue_lib/stores/useToastStore';
 import { ToastType } from './vue_lib/types';
@@ -57,7 +57,7 @@ async function onClearSending() {
 
 onMounted(async () => {
 	// Not awaited: theme() may hang on some WebKitGTK setups (bounded by a timeout).
-	syncSystemTheme(getCurrentWindow())
+	syncSystemTheme(getCurrentWindow(), { portal: tauriPortal() })
 		.then((unlisten) => {
 			if (unlisten) unlisteners.push(unlisten);
 		})
