@@ -31,6 +31,9 @@ export const useTransfersStore = defineStore('transfers', () => {
 	const items = ref(new Map<string, TransferView>());
 	const expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const fallbackNotified = new Set<string>();
+	/** Client-only timestamps (never in the DTO): first sighting and first terminal state. */
+	const timing = ref(new Map<string, { startedAt: number; endedAt: number | null }>());
+	const ENDED_STATES = ['Finished', 'Cancelled', 'Rejected', 'Disconnected'];
 
 	function sameTransport(a: TransportDto | null | undefined, b: TransportDto | null | undefined): boolean {
 		return (
@@ -102,6 +105,13 @@ export const useTransfersStore = defineStore('transfers', () => {
 			view.ui.consent_deadline = null;
 		}
 
+		const tm = timing.value.get(dto.id);
+		if (!tm) {
+			timing.value.set(dto.id, { startedAt: Date.now(), endedAt: ENDED_STATES.includes(dto.state) ? Date.now() : null });
+		} else if (tm.endedAt === null && ENDED_STATES.includes(dto.state)) {
+			timing.value.set(dto.id, { ...tm, endedAt: Date.now() });
+		}
+
 		items.value.set(dto.id, view);
 		return true;
 	}
@@ -130,6 +140,7 @@ export const useTransfersStore = defineStore('transfers', () => {
 		clearExpiry(id);
 		fallbackNotified.delete(id);
 		items.value.delete(id);
+		timing.value.delete(id);
 	}
 
 	async function sendLan(payload: SendPayloadDto) {
@@ -151,5 +162,14 @@ export const useTransfersStore = defineStore('transfers', () => {
 		[...inbound.value].sort((a, b) => (b.ui.consent_deadline ?? 0) - (a.ui.consent_deadline ?? 0)),
 	);
 
-	return { items, inbound, outbound, inboundSorted, upsert, consent, cancel, clear, sendLan, sendBle };
+	/** Newest first (by first sighting), ties by id; stable across progress updates. */
+	const sortedItems = computed(() =>
+		[...items.value.values()].sort(
+			(a, b) =>
+				(timing.value.get(b.id)?.startedAt ?? 0) - (timing.value.get(a.id)?.startedAt ?? 0)
+				|| a.id.localeCompare(b.id),
+		),
+	);
+
+	return { items, timing, sortedItems, inbound, outbound, inboundSorted, upsert, consent, cancel, clear, sendLan, sendBle };
 });
