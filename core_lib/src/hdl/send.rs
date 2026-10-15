@@ -12,8 +12,8 @@ use tokio_util::sync::CancellationToken;
 use crate::channel::ChannelMessage;
 use crate::errors::AppError;
 use crate::hdl::{
-    BleReceiver, MigratableStream, OutboundPayload, OutboundRequest, TransferState, l2cap_connect,
-    weave_connect,
+    BleReceiver, MigratableStream, OutboundPayload, OutboundRequest, TransferState, TransportInfo,
+    TransportMedium, TransportReason, l2cap_connect, weave_connect,
 };
 use crate::utils::{DeviceType, RemoteDeviceInfo};
 
@@ -61,6 +61,11 @@ pub async fn send_files_ble(
             device_type: DeviceType::Phone,
         },
     );
+    or.set_transport(TransportInfo::initial(if over_l2cap {
+        TransportMedium::BleL2cap
+    } else {
+        TransportMedium::Ble
+    }));
     or.set_hold_files_for_upgrade(true);
     or.set_slow_link(true);
     if over_l2cap {
@@ -80,6 +85,12 @@ pub async fn send_files_ble(
             if upgrade_settled || since.elapsed() >= UPGRADE_WAIT {
                 if !upgrade_settled {
                     info!("no upgrade offer; sending over Bluetooth");
+                    let medium =
+                        or.state.transport.as_ref().map_or(TransportMedium::Ble, |t| t.medium);
+                    let expected = crate::hdl::expected_send_medium();
+                    let reason = Some(TransportReason::NoOffer);
+                    or.report_transport(TransportInfo::new(medium, expected, reason)).await;
+                    upgrade_settled = true;
                 }
                 let r = tokio::select! {
                     r = or.send_held_files() => r,

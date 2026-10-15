@@ -17,7 +17,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::broadcast::{Receiver, Sender};
 
-use super::{InnerState, TransferState};
+use super::{InnerState, TransferState, TransportInfo, TransportMedium};
 use crate::channel::{self, ChannelMessage, MessageClient, TransferAction, TransferKind};
 use crate::hdl::TextPayloadInfo;
 use crate::hdl::info::{InternalFileInfo, TransferMetadata, TransferPayload, TransferPayloadKind};
@@ -165,6 +165,9 @@ pub struct InboundRequest<S = TcpStream> {
     /// The sender's Wi-Fi IPv4 address from its ConnectionRequest (MediumMetadata), if it
     /// has one: decides between a WIFI_LAN and a WIFI_HOTSPOT bandwidth upgrade.
     peer_ip: Option<[u8; 4]>,
+    /// Upgrade mediums the sender listed in its ConnectionRequest (raw proto values; empty if
+    /// it listed none): explains a failed upgrade (`TransportReason::PeerUnsupported`).
+    peer_mediums: Vec<i32>,
     /// Hotspot hosted for this transfer (WIFI_HOTSPOT upgrade); removed when the request ends.
     #[cfg(all(feature = "experimental", target_os = "linux"))]
     hotspot: Option<crate::hdl::HotspotGuard>,
@@ -212,6 +215,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
             len_buf: [0; 4],
             len_have: 0,
             peer_ip: None,
+            peer_mediums: Vec::new(),
             #[cfg(all(feature = "experimental", target_os = "linux"))]
             hotspot: None,
             #[cfg(all(feature = "experimental", target_os = "linux"))]
@@ -222,6 +226,12 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
     /// Enable Wi-Fi bandwidth upgrade for this (BLE) session.
     pub fn set_bwu_tcp_port(&mut self, port: u16) {
         self.bwu_tcp_port = Some(port);
+        self.state.transport = Some(TransportInfo::initial(TransportMedium::Ble));
+    }
+
+    /// The link this session starts on (reported with the first state update).
+    pub fn set_transport(&mut self, transport: TransportInfo) {
+        self.state.transport = Some(transport);
     }
 
     /// Consume the "run the bandwidth upgrade now" flag.
@@ -493,6 +503,12 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
                     .and_then(|c| c.medium_metadata.as_ref())
                     .and_then(|m| m.ip_address.as_ref())
                     .and_then(|ip| <[u8; 4]>::try_from(ip.as_slice()).ok());
+                self.peer_mediums = frame
+                    .v1
+                    .as_ref()
+                    .and_then(|v| v.connection_request.as_ref())
+                    .map(|c| c.mediums.clone())
+                    .unwrap_or_default();
                 info!("RemoteDeviceInfo: {:?}", &rdi);
 
                 // Advance current state
@@ -1801,6 +1817,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
                 kind: TransferKind::Inbound,
                 state: Some(self.state.state.clone()),
                 metadata: self.state.transfer_metadata.clone(),
+                transport: self.state.transport.clone(),
             }),
         });
         // Add a small sleep timer to allow the Tokio runtime to have
@@ -1812,12 +1829,85 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
 
 #[cfg(all(feature = "experimental", target_os = "linux"))]
 impl InboundRequest<crate::hdl::MigratableStream> {
+    /// Run the bandwidth upgrade (`try_bwu`) and report the link the transfer ends up on.
+    pub async fn do_bwu(&mut self) -> Result<(), anyhow::Error> {
+        use crate::hdl::TransportReason;
+        let expected = self.bwu_expected_medium();
+        let current = self.state.transport.as_ref().map_or(TransportMedium::Ble, |t| t.medium);
+        let r = self.try_bwu().await;
+        let transport = match &r {
+            Ok(None) => {
+                let medium = match &self.hotspot {
+                    Some(h) if h.0.wifi_direct => TransportMedium::WifiDirect,
+                    Some(_) => TransportMedium::WifiHotspot,
+                    None => TransportMedium::WifiLan,
+                };
+                let reason = match medium {
+                    TransportMedium::WifiHotspot if expected == TransportMedium::WifiDirect => {
+                        Some(TransportReason::LinkStartFailed(
+                            "Wi-Fi Direct group failed, see journalctl -u quickshare-ap".into(),
+                        ))
+                    }
+                    TransportMedium::WifiLan if !crate::hdl::hotspot_available() => {
+                        Some(TransportReason::HelperMissing)
+                    }
+                    _ => None,
+                };
+                Some(TransportInfo::new(medium, expected, reason))
+            }
+            Ok(Some(reason)) => Some(TransportInfo::new(current, expected, Some(reason.clone()))),
+            // The Bluetooth link itself is gone: nothing to report, the transfer ends.
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::UnexpectedEof) =>
+            {
+                None
+            }
+            Err(e) => Some(TransportInfo::new(
+                current,
+                expected,
+                Some(TransportReason::LinkStartFailed(e.to_string())),
+            )),
+        };
+        if let Some(t) = transport {
+            t.log();
+            self.update_state(|e| e.transport = Some(t), true).await;
+        }
+        r.map(|_| ())
+    }
+
+    /// The best link this session's upgrade can reach (see `bwu_wants_hotspot`).
+    fn bwu_expected_medium(&self) -> TransportMedium {
+        if !self.bwu_wants_hotspot() {
+            TransportMedium::WifiLan
+        } else if crate::hdl::helper_unit("quickshare-ap", "QSD_AP_UNIT").is_some() {
+            TransportMedium::WifiDirect
+        } else {
+            TransportMedium::WifiHotspot
+        }
+    }
+
+    /// Why the phone didn't come over: it never listed the medium we offered, or `other`.
+    fn bwu_failure_reason(
+        &self,
+        offered: TransportMedium,
+        other: crate::hdl::TransportReason,
+    ) -> crate::hdl::TransportReason {
+        let listed = offered.to_upgrade().is_some_and(|m| self.peer_mediums.contains(&(m as i32)));
+        if !self.peer_mediums.is_empty() && !listed {
+            crate::hdl::TransportReason::PeerUnsupported
+        } else {
+            other
+        }
+    }
+
     /// Run the Wi-Fi bandwidth upgrade: offer a TCP path over the (encrypted) BLE
     /// channel, accept the phone, exchange the plaintext CLIENT_INTRODUCTION/ACK,
     /// drain the BLE channel, then swap the socket to TCP so the (large) payload
     /// streams over Wi-Fi with the same keys/sequence numbers. On failure the
-    /// session stays on BLE — never worse than BLE-only.
-    pub async fn do_bwu(&mut self) -> Result<(), anyhow::Error> {
+    /// session stays on BLE — never worse than BLE-only — and the reason is returned.
+    async fn try_bwu(&mut self) -> Result<Option<crate::hdl::TransportReason>, anyhow::Error> {
+        use crate::hdl::TransportReason;
         use location_nearby_connections::bandwidth_upgrade_negotiation_frame::EventType;
 
         // Which path: a hotspot we host (started in the background, see hotspot_task) or the
@@ -1840,11 +1930,11 @@ impl InboundRequest<crate::hdl::MigratableStream> {
                 Ok(Ok(hs)) => hs,
                 Ok(Err(e)) => {
                     warn!("BWU: couldn't start a hotspot ({e}); staying on Bluetooth");
-                    return Ok(());
+                    return Ok(Some(TransportReason::LinkStartFailed(e.to_string())));
                 }
                 Err(e) => {
                     warn!("BWU: hotspot task failed ({e}); staying on Bluetooth");
-                    return Ok(());
+                    return Ok(Some(TransportReason::LinkStartFailed(e.to_string())));
                 }
             };
             info!(
@@ -1895,6 +1985,11 @@ impl InboundRequest<crate::hdl::MigratableStream> {
         // BLE channel meanwhile: a phone that can't join reports UPGRADE_FAILURE (after ~10 s)
         // and we stop waiting right away. The length prefix is read with cancel-safe single
         // reads (as in handle()), so a TCP accept winning the race loses no bytes.
+        let offered = match &self.hotspot {
+            Some(h) if h.0.wifi_direct => TransportMedium::WifiDirect,
+            Some(_) => TransportMedium::WifiHotspot,
+            None => TransportMedium::WifiLan,
+        };
         let deadline = tokio::time::Instant::now() + accept_timeout;
         let mut tcp = loop {
             tokio::select! {
@@ -1905,12 +2000,12 @@ impl InboundRequest<crate::hdl::MigratableStream> {
                     }
                     Err(e) => {
                         warn!("BWU: accept failed ({e}); staying on BLE");
-                        return Ok(());
+                        return Ok(Some(TransportReason::LinkStartFailed(e.to_string())));
                     }
                 },
                 _ = tokio::time::sleep_until(deadline) => {
                     warn!("BWU: no TCP upgrade within timeout; staying on BLE");
-                    return Ok(());
+                    return Ok(Some(self.bwu_failure_reason(offered, TransportReason::Timeout)));
                 }
                 n = self.socket.read(&mut self.len_buf[self.len_have..]) => {
                     let n = n?;
@@ -1931,7 +2026,9 @@ impl InboundRequest<crate::hdl::MigratableStream> {
                     match event {
                         Some(EventType::UpgradeFailure) => {
                             warn!("BWU: the phone couldn't join the upgrade link; staying on BLE");
-                            return Ok(());
+                            return Ok(Some(
+                                self.bwu_failure_reason(offered, TransportReason::PeerJoinFailed),
+                            ));
                         }
                         Some(other) => debug!("BWU: event {other:?} while waiting for the phone"),
                         None => self.process_offline_frame(offline).await?,
@@ -2041,6 +2138,6 @@ impl InboundRequest<crate::hdl::MigratableStream> {
                 None => "Wi-Fi LAN",
             }
         );
-        Ok(())
+        Ok(None)
     }
 }
