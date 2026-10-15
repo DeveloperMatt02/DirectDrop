@@ -26,10 +26,11 @@ function makeTransferView(
 	payloadKind: 'Files' | 'Url' | 'Text' | 'WiFi',
 	files: string[] = [],
 	url: string | null = null,
+	kind: 'Inbound' | 'Outbound' = 'Inbound',
 ): TransferView {
 	return {
 		id: 'rx-1',
-		kind: 'Inbound',
+		kind,
 		state: 'Finished',
 		metadata: {
 			id: 'rx-1',
@@ -88,6 +89,14 @@ describe('TransferCard buttons in Finished state (§T2)', () => {
 
 		expect(html).not.toContain('OPEN FILE');
 		expect(html).toContain('OPEN FOLDER');
+	});
+
+	test('Outbound Finished: no open buttons (1 file and N files)', async () => {
+		for (const files of [['photo.jpg'], ['a.pdf', 'b.pdf']]) {
+			const { html } = await renderCard(makeTransferView('Files', files, null, 'Outbound'));
+			expect(html).not.toContain('OPEN FILE');
+			expect(html).not.toContain('OPEN FOLDER');
+		}
 	});
 
 	test('URL: renders only OPEN button and unchanged for URL', async () => {
