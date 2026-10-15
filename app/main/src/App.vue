@@ -2,11 +2,11 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import DeviceBoard from './components/DeviceBoard.vue';
-import FlowDiagram from './components/FlowDiagram.vue';
 import SendPane from './components/SendPane.vue';
 import StatusHeader from './components/StatusHeader.vue';
+import TransferCard from './components/TransferCard.vue';
 import TransferQueue from './components/TransferQueue.vue';
 import SettingsDrawer from './composables/SettingsDrawer.vue';
 import { syncSystemTheme } from './composables/systemTheme';
@@ -15,6 +15,7 @@ import { useToastStore } from './vue_lib/stores/useToastStore';
 import { ToastType } from './vue_lib/types';
 import { useDevicesStore } from './stores/devices';
 import { useSessionStore } from './stores/session';
+import { isPendingConsent } from './stores/transferGroups';
 import { useTransfersStore } from './stores/transfers';
 import {
 	QSD_BLE_PRESENCE_EVENT,
@@ -31,6 +32,8 @@ const session = useSessionStore();
 const devices = useDevicesStore();
 const transfers = useTransfersStore();
 const toasts = useToastStore();
+
+const pendingConsent = computed(() => transfers.inboundSorted.filter(isPendingConsent));
 
 const settingsOpen = ref(false);
 const stagedFiles = ref<string[]>([]);
@@ -147,7 +150,9 @@ onBeforeUnmount(() => {
 		<StatusHeader @open-settings="settingsOpen = true" />
 		<main class="flex-1 min-h-0 min-w-0 overflow-y-auto">
 			<div class="flex flex-col gap-4 p-4 max-w-[1100px] mx-auto items-stretch">
-				<FlowDiagram />
+				<section v-if="pendingConsent.length > 0" aria-label="Incoming requests" class="flex flex-col gap-3">
+					<TransferCard v-for="t in pendingConsent" :key="t.id" :transfer="t" />
+				</section>
 				<div class="grid grid-cols-1 min-[1000px]:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
 					<SendPane :staged-files="stagedFiles" @staged="onStaged" @clear-sending="onClearSending" />
 					<DeviceBoard :staged-files="stagedFiles" />
