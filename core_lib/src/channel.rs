@@ -1,4 +1,7 @@
-use crate::{TransferState, hdl::info::TransferMetadata};
+use crate::{
+    TransferState,
+    hdl::{TransportInfo, info::TransferMetadata},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TransferAction {
@@ -18,6 +21,8 @@ pub struct MessageClient {
     pub kind: TransferKind,
     pub state: Option<TransferState>,
     pub metadata: Option<TransferMetadata>,
+    /// The link the transfer runs on; re-sent whenever it changes (the latest one counts).
+    pub transport: Option<TransportInfo>,
 }
 
 // TODO: This should be separate structs

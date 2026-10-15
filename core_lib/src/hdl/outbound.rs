@@ -21,7 +21,9 @@ use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use super::info::{InternalFileInfo, TransferMetadata, TransferPayload, TransferPayloadKind};
-use super::{InnerState, TransferState};
+use super::{InnerState, TransferState, TransportInfo};
+#[cfg(all(feature = "experimental", target_os = "linux"))]
+use super::{TransportMedium, TransportReason};
 use crate::channel::{self, ChannelMessage, MessageClient, TransferAction, TransferKind};
 use crate::location_nearby_connections::bandwidth_upgrade_negotiation_frame::upgrade_path_info::Medium;
 use crate::location_nearby_connections::bandwidth_upgrade_negotiation_frame::{
@@ -236,6 +238,17 @@ impl<S: AsyncRead + AsyncWrite + Unpin> OutboundRequest<S> {
         }
 
         Ok(())
+    }
+
+    /// The link this session starts on (reported with the first state update).
+    pub fn set_transport(&mut self, transport: TransportInfo) {
+        self.state.transport = Some(transport);
+    }
+
+    /// Report the link the transfer runs on now (logged and sent to clients).
+    pub async fn report_transport(&mut self, transport: TransportInfo) {
+        transport.log();
+        self.update_state(|e| e.transport = Some(transport), true).await;
     }
 
     /// See `hold_files_for_upgrade`: Accept then only marks the files held.
@@ -1433,6 +1446,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> OutboundRequest<S> {
                 kind: TransferKind::Outbound,
                 state: Some(self.state.state.clone()),
                 metadata: self.state.transfer_metadata.clone(),
+                transport: self.state.transport.clone(),
             }),
         });
         // Add a small sleep timer to allow the Tokio runtime to have
@@ -1467,6 +1481,12 @@ fn send_mediums() -> Vec<i32> {
         .collect()
 }
 
+/// The best link the receiver can upgrade us to: the fastest medium we advertise.
+#[cfg(all(feature = "experimental", target_os = "linux"))]
+pub(crate) fn expected_send_medium() -> TransportMedium {
+    TransportMedium::best_of(&send_mediums()).unwrap_or(TransportMedium::WifiLan)
+}
+
 fn bwu_frame(event_type: EventType) -> OfflineFrame {
     location_nearby_connections::OfflineFrame {
         version: Some(location_nearby_connections::offline_frame::Version::V1.into()),
@@ -1486,12 +1506,18 @@ fn bwu_frame(event_type: EventType) -> OfflineFrame {
     }
 }
 
-/// Give up on the upgrade (the transfer continues on the prior channel).
+/// Give up on the upgrade (the transfer continues on the prior channel), returning why
+/// (`TransportReason::LinkStartFailed` with the message unless given).
 #[cfg(all(feature = "experimental", target_os = "linux"))]
 macro_rules! bail_stay {
-    ($($arg:tt)*) => {{
+    ($reason:expr; $($arg:tt)*) => {{
         warn!("BWU: {}; staying on the prior channel", format!($($arg)*));
-        return Ok(());
+        return Ok(Some($reason));
+    }};
+    ($($arg:tt)*) => {{
+        let msg = format!($($arg)*);
+        warn!("BWU: {msg}; staying on the prior channel");
+        return Ok(Some(TransportReason::LinkStartFailed(msg)));
     }};
 }
 
@@ -1502,11 +1528,35 @@ impl OutboundRequest<crate::hdl::MigratableStream> {
         self.bwu_offer.take()
     }
 
+    /// Follow the receiver's upgrade offer (`try_bwu`) and report the link the transfer ends up on.
+    pub async fn do_bwu(&mut self, info: UpgradePathInfo) -> Result<(), anyhow::Error> {
+        let expected = expected_send_medium();
+        let current = self.state.transport.as_ref().map_or(TransportMedium::Ble, |t| t.medium);
+        let offered = TransportMedium::from_upgrade(info.medium());
+        let r = self.try_bwu(info).await;
+        let upgraded = matches!(self.socket, crate::hdl::MigratableStream::Tcp(_));
+        let transport = match (&r, offered) {
+            (_, Some(m)) if upgraded => TransportInfo::new(m, expected, None),
+            (Ok(Some(reason)), _) => TransportInfo::new(current, expected, Some(reason.clone())),
+            (Ok(None), _) => TransportInfo::new(current, expected, None),
+            (Err(e), _) => TransportInfo::new(
+                current,
+                expected,
+                Some(TransportReason::LinkStartFailed(e.to_string())),
+            ),
+        };
+        self.report_transport(transport).await;
+        r.map(|_| ())
+    }
+
     /// Follow the receiver's upgrade offer as the responder: connect to the new medium, send the
     /// plaintext CLIENT_INTRODUCTION (and read the ACK), drain the prior channel with
     /// LAST_WRITE / SAFE_TO_CLOSE, then swap the socket. Keys and sequence numbers carry over.
-    /// On failure the session stays on the prior channel.
-    pub async fn do_bwu(&mut self, info: UpgradePathInfo) -> Result<(), anyhow::Error> {
+    /// On failure the session stays on the prior channel and the reason is returned.
+    async fn try_bwu(
+        &mut self,
+        info: UpgradePathInfo,
+    ) -> Result<Option<TransportReason>, anyhow::Error> {
         use location_nearby_connections::bandwidth_upgrade_negotiation_frame::ClientIntroduction;
 
         let (addr, bind_ip) = match info.medium() {
@@ -1540,7 +1590,10 @@ impl OutboundRequest<crate::hdl::MigratableStream> {
                     info.medium()
                 );
                 if !crate::hdl::join_available() {
-                    bail_stay!("{:?} offered but the join helper isn't installed", info.medium());
+                    bail_stay!(
+                        TransportReason::HelperMissing;
+                        "{:?} offered but the join helper isn't installed", info.medium()
+                    );
                 }
                 let guard = match crate::hdl::join_network(ssid, password, frequency, gateway).await
                 {
@@ -1551,7 +1604,10 @@ impl OutboundRequest<crate::hdl::MigratableStream> {
                 self.joined = Some(guard);
                 (std::net::SocketAddr::from((gw, port as u16)), Some(ip))
             }
-            other => bail_stay!("{other:?} not supported for sending yet"),
+            other => bail_stay!(
+                TransportReason::PeerUnsupported;
+                "{other:?} not supported for sending yet"
+            ),
         };
         info!("BWU: connecting to {addr}");
         let connect = async {
@@ -1567,7 +1623,12 @@ impl OutboundRequest<crate::hdl::MigratableStream> {
             Ok(Ok(s)) => s,
             r => {
                 warn!("BWU: can't reach {addr} ({r:?}); staying on the prior channel");
-                return Ok(());
+                return Ok(Some(match r {
+                    Ok(Err(e)) => {
+                        TransportReason::LinkStartFailed(format!("can't reach {addr}: {e}"))
+                    }
+                    _ => TransportReason::Timeout,
+                }));
             }
         };
         tcp.set_nodelay(true)?;
@@ -1666,7 +1727,7 @@ impl OutboundRequest<crate::hdl::MigratableStream> {
         for f in deferred {
             self.process_offline_frame(f).await?;
         }
-        Ok(())
+        Ok(None)
     }
 }
 

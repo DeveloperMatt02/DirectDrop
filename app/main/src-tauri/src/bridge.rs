@@ -45,6 +45,7 @@ struct ProgressEntry {
     state: crate::dto::TransferStateDto,
     ack_bytes: u64,
     total_bytes: u64,
+    transport: Option<crate::dto::TransportDto>,
     at: Instant,
 }
 
@@ -90,7 +91,13 @@ fn spawn_transfer_task(app_handle: &AppHandle) {
                 pending_consent.lock().unwrap().insert(id.clone());
                 last.insert(
                     id.clone(),
-                    ProgressEntry { state: tstate, ack_bytes: ack, total_bytes: total, at: Instant::now() },
+                    ProgressEntry {
+                        state: tstate,
+                        ack_bytes: ack,
+                        total_bytes: total,
+                        transport: transfer.transport.clone(),
+                        at: Instant::now(),
+                    },
                 );
                 // Notifica di sistema (parita' CLI: nome + PIN).
                 let name = transfer
@@ -138,17 +145,19 @@ fn spawn_transfer_task(app_handle: &AppHandle) {
                 continue;
             }
 
-            // Dedup + throttle progress (§2.4).
+            // Dedup + throttle progress (§2.4). Un cambio di mezzo passa sempre.
             match last.get(&id) {
                 Some(prev)
                     if prev.state == tstate
                         && prev.ack_bytes == ack
-                        && prev.total_bytes == total =>
+                        && prev.total_bytes == total
+                        && prev.transport == transfer.transport =>
                 {
                     continue;
                 }
                 Some(prev)
                     if prev.state == tstate
+                        && prev.transport == transfer.transport
                         && ack.saturating_sub(prev.ack_bytes) < dto::PROGRESS_BYTES_STEP
                         && prev.at.elapsed() < dto::PROGRESS_MIN_INTERVAL =>
                 {
@@ -158,7 +167,13 @@ fn spawn_transfer_task(app_handle: &AppHandle) {
             }
             last.insert(
                 id,
-                ProgressEntry { state: tstate, ack_bytes: ack, total_bytes: total, at: Instant::now() },
+                ProgressEntry {
+                    state: tstate,
+                    ack_bytes: ack,
+                    total_bytes: total,
+                    transport: transfer.transport.clone(),
+                    at: Instant::now(),
+                },
             );
             emit_transfer(&capp, &transfer);
         }

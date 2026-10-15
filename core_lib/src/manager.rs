@@ -5,7 +5,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::channel::{self, ChannelMessage, MessageClient, TransferKind};
 use crate::errors::AppError;
-use crate::hdl::{InboundRequest, OutboundPayload, OutboundRequest, TransferState};
+use crate::hdl::{
+    InboundRequest, OutboundPayload, OutboundRequest, TransferState, TransportInfo, TransportMedium,
+};
 use crate::utils::RemoteDeviceInfo;
 
 const INNER_NAME: &str = "TcpServer";
@@ -78,6 +80,7 @@ impl TcpServer {
                                     }
                                 }
                                 let mut ir = InboundRequest::new(socket, remote_addr.to_string(), csender);
+                                ir.set_transport(TransportInfo::initial(TransportMedium::WifiLan));
 
                                 loop {
                                     match ir.handle().await {
@@ -95,7 +98,8 @@ impl TcpServer {
                                                         msg: channel::Message::Client(MessageClient {
                                                             kind: TransferKind::Inbound,
                                                             state: Some(TransferState::Disconnected),
-                                                            metadata: Default::default()
+                                                            metadata: Default::default(),
+                                                            transport: ir.state.transport.clone(),
                                                         }),
                                                     });
                                                 }
@@ -135,6 +139,7 @@ impl TcpServer {
                 name: si.name,
             },
         );
+        or.set_transport(TransportInfo::initial(TransportMedium::WifiLan));
 
         // Send connection request
         or.send_connection_request().await?;
@@ -162,7 +167,8 @@ impl TcpServer {
                                         msg: channel::Message::Client(MessageClient {
                                             kind: TransferKind::Outbound,
                                             state: Some(TransferState::Disconnected),
-                                            metadata: Default::default()
+                                            metadata: Default::default(),
+                                            transport: or.state.transport.clone(),
                                         }),
                                     });
                                 }

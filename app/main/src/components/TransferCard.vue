@@ -9,6 +9,7 @@ import type { TransferView } from '../types/qsd';
 import { HANDSHAKE_STATES, baseName, humanSize } from '../types/qsd';
 import { useTransfersStore } from '../stores/transfers';
 import ConsentCard from './ConsentCard.vue';
+import TransportBadge from './TransportBadge.vue';
 
 const BLOCKS = 24;
 
@@ -213,6 +214,7 @@ defineExpose({ openFile, openFolder, openTarget });
 				{{ t.state.toUpperCase() }}
 			</p>
 		</div>
+		<TransportBadge :transport="t.transport" />
 
 		<div v-if="isActive" class="mt-2">
 			<div class="flex justify-between text-slate-400" aria-live="polite">

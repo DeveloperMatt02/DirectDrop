@@ -19,6 +19,19 @@
       "ack_bytes": 0
     }
   },
+  "transfer_transport_fallback": {
+    "id": "ble-1",
+    "kind": "Inbound",
+    "state": "ReceivingFiles",
+    "metadata": null,
+    "transport": {
+      "medium": "Ble",
+      "expected": "WifiDirect",
+      "is_fallback": true,
+      "reason": "peer_join_failed",
+      "reason_text": "the phone couldn't join the Wi-Fi link"
+    }
+  },
   "consent_accept": { "id": "192.168.1.5:51234", "action": "ConsentAccept" },
   "send_lan": {
     "id": "3f2a-uuid",

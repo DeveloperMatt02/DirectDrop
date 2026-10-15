@@ -58,6 +58,8 @@ mod mdns;
 pub use mdns::*;
 mod outbound;
 pub use outbound::*;
+mod transport;
+pub use transport::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -115,6 +117,9 @@ pub struct InnerState {
     // pub text_is_url: bool,
     // pub wifi_ssid: Option<String>,
     pub payload_buffers: HashMap<i64, Vec<u8>>,
+
+    // The link the transfer runs on (sent to clients with every state update).
+    pub transport: Option<TransportInfo>,
 }
 
 #[derive(Debug, Clone)]
