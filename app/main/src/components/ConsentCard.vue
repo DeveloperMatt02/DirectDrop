@@ -44,53 +44,62 @@ const files = computed(() => props.transfer.metadata?.files ?? []);
 </script>
 
 <template>
-	<section class="bp-sketch bg-slate-900 p-4 w-full max-w-[380px]" aria-label="Consent request">
-		<div class="flex items-center justify-between gap-3">
-			<p class="font-mono text-[11px] tracking-[0.2em] text-slate-400">CONSENT // UKEY2</p>
-			<div class="flex items-center gap-2">
-				<svg width="60" height="60" viewBox="0 0 60 60" role="timer" aria-label="Consent countdown">
-					<circle cx="30" cy="30" :r="R" fill="none" stroke="#1e293b" stroke-width="5" />
-					<circle
-						cx="30" cy="30" :r="R" fill="none"
-						:stroke="transfer.ui.expired ? '#f87171' : '#fb923c'" stroke-width="5" stroke-linecap="butt"
-						:stroke-dasharray="CIRC" :stroke-dashoffset="CIRC * (1 - frac)"
-						transform="rotate(-90 30 30)" style="transition: stroke-dashoffset 250ms linear;" />
-					<text
-						x="30" y="34" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="ui-monospace, Menlo, Consolas, monospace"
-						data-testid="consent-countdown">
-						{{ transfer.ui.expired ? 'EXP' : `${remainingSec ?? '–'}s` }}
-					</text>
-				</svg>
+	<section class="w-full max-w-[560px] rounded-xl border border-accent bg-panel p-4" aria-label="Consent request">
+		<div class="flex items-start gap-4">
+			<div class="min-w-0 flex-1">
+				<p class="font-mono text-[11px] font-semibold tracking-[0.2em] text-dim">
+					CONSENT // UKEY2
+				</p>
+				<p class="mt-1 text-[13px] text-ink">
+					<span class="font-semibold">{{ deviceName }}</span>
+					<span class="text-faint"> → </span>
+					<span class="text-dim">{{ description || 'incoming transfer' }}</span>
+				</p>
 			</div>
+			<svg
+				width="60" height="60" viewBox="0 0 60 60"
+				class="shrink-0" role="timer" aria-label="Consent countdown">
+				<circle
+					cx="30" cy="30" :r="R"
+					fill="none" class="stroke-raise" stroke-width="5" />
+				<circle
+					cx="30" cy="30" :r="R"
+					fill="none" :class="transfer.ui.expired ? 'stroke-cancel' : 'stroke-accent'" stroke-width="5"
+					stroke-linecap="butt" :stroke-dasharray="CIRC" :stroke-dashoffset="CIRC * (1 - frac)"
+					transform="rotate(-90 30 30)" style="transition: stroke-dashoffset 250ms linear;" />
+				<text
+					x="30" y="34" text-anchor="middle"
+					class="fill-ink" font-size="13" font-family="ui-monospace, Menlo, Consolas, monospace"
+					data-testid="consent-countdown">
+					{{ transfer.ui.expired ? 'EXP' : `${remainingSec ?? '–'}s` }}
+				</text>
+			</svg>
 		</div>
-		<p class="mt-1 font-mono text-[12px] text-slate-300">
-			<span class="text-sky-300">{{ deviceName }}</span>
-			<span class="text-slate-500"> → </span>
-			<span>{{ description || 'incoming transfer' }}</span>
-		</p>
 		<p
-			v-if="pin" class="font-mono font-bold text-orange-400 text-center tabular-nums"
+			v-if="pin" class="mt-2 text-center font-mono font-semibold tabular-nums text-ink"
 			style="font-size: 56px; letter-spacing: 0.15em; line-height: 1.2;" data-testid="consent-pin" aria-live="polite">
 			{{ pin }}
 		</p>
-		<p v-else class="font-mono text-[12px] text-slate-500 text-center">NO PIN PROVIDED</p>
-		<ul v-if="files.length > 0" class="mt-1 font-mono text-[11px] text-slate-400 space-y-0.5">
+		<p v-else class="mt-2 text-center font-mono text-[12px] text-faint">
+			NO PIN PROVIDED
+		</p>
+		<ul v-if="files.length > 0" class="mt-1 space-y-0.5 font-mono text-[11px] text-dim">
 			<li
 				v-for="(f, i) in files.slice(0, 3)" :key="`${f}-${i}`"
 				class="truncate" :title="f">
-				+ {{ baseName(f) }}
+				{{ baseName(f) }}
 			</li>
 		</ul>
-		<div class="flex gap-2 mt-3">
+		<div class="mt-3 flex gap-2">
 			<button
 				type="button" :disabled="disabled"
-				class="flex-1 font-mono text-[13px] font-bold bg-orange-400 text-black border border-orange-400 px-4 py-2 hover:bg-orange-300 disabled:opacity-40"
+				class="qsd-action qsd-action-primary flex-1"
 				@click="emit('accept')">
 				ACCEPT
 			</button>
 			<button
 				type="button" :disabled="disabled"
-				class="flex-1 font-mono text-[13px] bg-transparent text-slate-200 border border-slate-500 px-4 py-2 hover:border-slate-200 disabled:opacity-40"
+				class="qsd-action flex-1"
 				@click="emit('decline')">
 				DECLINE
 			</button>

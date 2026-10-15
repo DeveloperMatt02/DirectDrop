@@ -7,11 +7,10 @@ import { useToastStore } from '../vue_lib/stores/useToastStore';
 import { ToastType } from '../vue_lib/types';
 import type { TransferView } from '../types/qsd';
 import { HANDSHAKE_STATES, baseName, humanSize } from '../types/qsd';
+import { avgSpeedBps, formatClock } from '../stores/transferGroups';
 import { useTransfersStore } from '../stores/transfers';
 import ConsentCard from './ConsentCard.vue';
 import TransportBadge from './TransportBadge.vue';
-
-const BLOCKS = 24;
 
 const props = defineProps({
 	transfer: { type: Object as () => TransferView, required: true },
@@ -37,6 +36,58 @@ const isActive = computed(() => ['SentIntroduction', 'SendingFiles', 'ReceivingF
 const isSending = computed(() => ['SentIntroduction', 'SendingFiles'].includes(t.value.state));
 const isFinished = computed(() => t.value.state === 'Finished');
 const isTerminalError = computed(() => ['Cancelled', 'Rejected', 'Disconnected'].includes(t.value.state));
+const isInbound = computed(() => t.value.kind === 'Inbound');
+const timing = computed(() => transfers.timing.get(t.value.id));
+
+/** Row title: "RECEIVED FROM <peer>", "SEND TO <peer> CANCELLED", … */
+const title = computed(() => {
+	const rx = isInbound.value;
+	const st = t.value.state;
+	if (isActive.value) return { verb: rx ? 'RECEIVING FROM' : 'SENDING TO', suffix: '' };
+	if (st === 'Finished') return { verb: rx ? 'RECEIVED FROM' : 'SENT TO', suffix: '' };
+	const failed = { Cancelled: 'CANCELLED', Rejected: 'DECLINED', Disconnected: 'INTERRUPTED' } as Record<string, string>;
+	if (failed[st]) return { verb: rx ? 'RECEIVE FROM' : 'SEND TO', suffix: failed[st] };
+	if (isOutboundWaiting.value) return { verb: 'WAITING FOR', suffix: '' };
+	return { verb: rx ? 'CONNECTING WITH' : 'CONNECTING TO', suffix: '' };
+});
+
+const status = computed(() => {
+	const st = t.value.state;
+	const dir = isInbound.value ? 'text-rx' : 'text-tx';
+	if (st === 'Finished') return { label: 'DONE', cls: dir };
+	if (st === 'Cancelled') return { label: 'CANCELLED', cls: 'text-cancel' };
+	if (st === 'Rejected') return { label: 'DECLINED', cls: 'text-cancel' };
+	if (st === 'Disconnected') return { label: 'LINK LOST', cls: 'text-cancel' };
+	if (isActive.value) return { label: `${Math.round(frac.value * 100)}%`, cls: dir };
+	if (isOutboundWaiting.value && st === 'WaitingForUserConsent') return { label: 'WAITING', cls: 'text-dim' };
+	return { label: 'HANDSHAKE', cls: 'text-dim' };
+});
+
+/** Metadata line: file count and size, or the payload kind. */
+const summary = computed(() => {
+	const m = meta.value;
+	if (!m) return '';
+	const size = (m.total_bytes ?? 0) > 0 ? ` · ${humanSize(m.total_bytes)}` : '';
+	if (files.value.length > 0 || m.payload_kind === 'Files') {
+		const n = files.value.length;
+		return `${n} FILE${n === 1 ? '' : 'S'}${size}`;
+	}
+	if (m.payload_kind === 'Text') return `TEXT${size}`;
+	if (m.payload_kind === 'Url') return 'LINK';
+	if (m.payload_kind === 'WiFi') return `WI-FI${m.wifi_ssid ? ` · ${m.wifi_ssid}` : ''}`;
+	return size.slice(3);
+});
+
+const clockLabel = computed(() => {
+	const tm = timing.value;
+	if (!tm) return null;
+	return formatClock(tm.endedAt ?? tm.startedAt, Date.now());
+});
+
+/** AVG speed of a finished transfer (handshake included, see avgSpeedBps). */
+const avgBps = computed(() =>
+	(isFinished.value ? avgSpeedBps(meta.value?.total_bytes ?? 0, timing.value) : null),
+);
 
 const frac = computed(() => {
 	const ack = meta.value?.ack_bytes ?? 0;
@@ -44,7 +95,6 @@ const frac = computed(() => {
 	if (!total || total <= 0) return 0;
 	return Math.min(1, Math.max(0, ack / total));
 });
-const filledBlocks = computed(() => Math.round(frac.value * BLOCKS));
 
 interface Sample { at: number; bytes: number }
 const samples = ref<Sample[]>([]);
@@ -185,117 +235,119 @@ defineExpose({ openFile, openFolder, openTarget });
 
 <template>
 	<ConsentCard v-if="isConsent" :transfer="transfer" @accept="accept" @decline="decline" />
-	<div v-else-if="isOutboundWaiting" class="border border-slate-800 bg-slate-900 p-3 font-mono text-[12px]" aria-live="polite">
-		<div class="flex items-baseline justify-between gap-2 min-w-0">
-			<p class="text-[13px] font-bold text-slate-200 truncate" :title="outboundPeer">
-				{{ outboundPeer }}
+	<article
+		v-else class="flex gap-3 rounded-lg border border-seam bg-panel p-3"
+		:data-test="`transfer-${t.kind.toLowerCase()}`">
+		<span
+			class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
+			:class="isInbound ? 'bg-rx-bg text-rx' : 'bg-tx-bg text-tx'" aria-hidden="true">
+			<svg
+				width="16" height="16" viewBox="0 0 16 16"
+				fill="none" stroke="currentColor" stroke-width="1.8">
+				<path v-if="isInbound" d="M8 2.5v10M3.5 8.5 8 13l4.5-4.5" stroke-linecap="round" stroke-linejoin="round" />
+				<path v-else d="M8 13.5v-10M3.5 7.5 8 3l4.5 4.5" stroke-linecap="round" stroke-linejoin="round" />
+			</svg>
+		</span>
+
+		<div class="min-w-0 flex-1">
+			<div class="flex min-w-0 items-baseline gap-2">
+				<p class="min-w-0 flex-1 truncate text-[13px] text-ink" :title="deviceName">
+					<span class="font-mono text-[11px] tracking-[0.06em] text-dim">{{ title.verb }}</span>
+					{{ ' ' }}<span class="font-semibold">{{ deviceName }}</span>
+					<template v-if="title.suffix">
+						{{ ' ' }}<span class="font-mono text-[11px] tracking-[0.06em] text-cancel">{{ title.suffix }}</span>
+					</template>
+				</p>
+				<span v-if="clockLabel" class="shrink-0 font-mono text-[11px] tabular-nums text-faint">
+					{{ clockLabel }}
+				</span>
+			</div>
+			<p class="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[11px] tabular-nums text-dim">
+				<span v-if="summary">{{ summary }}</span>
+				<span v-if="summary" aria-hidden="true">·</span>
+				<span class="font-semibold" :class="status.cls">{{ status.label }}</span>
 			</p>
-			<p class="text-slate-500 shrink-0">
-				{{ t.state.toUpperCase() }}
-			</p>
-		</div>
-		<p class="mt-1 text-slate-300">
-			WAITING FOR ACCEPT ON {{ outboundPeer.toUpperCase() }} — CHECK THE PIN THERE, NO BUTTON HERE<template v-if="outboundPin">
-				· PIN {{ outboundPin }}
+
+			<TransportBadge :transport="t.transport" class="mt-1.5">
+				<span v-if="isActive" class="tabular-nums" :class="isSending ? 'text-tx' : 'text-rx'" aria-live="polite">
+					{{ isSending ? 'TX' : 'RX' }} {{ humanSize(speedBps) }}/s
+				</span>
+				<span v-else-if="avgBps !== null" class="tabular-nums text-dim" data-test="avg-speed">
+					AVG {{ humanSize(avgBps) }}/s
+				</span>
+			</TransportBadge>
+
+			<template v-if="isOutboundWaiting">
+				<p class="mt-1.5 font-mono text-[11px] text-dim" aria-live="polite">
+					WAITING FOR ACCEPT ON {{ outboundPeer.toUpperCase() }} — CHECK THE PIN THERE, NO BUTTON HERE<template v-if="outboundPin">
+						· PIN <span class="font-semibold text-ink">{{ outboundPin }}</span>
+					</template>
+				</p>
+				<div class="mt-2 flex justify-end">
+					<button type="button" class="qsd-action qsd-action-cancel" @click="cancel">
+						CANCEL
+					</button>
+				</div>
 			</template>
-		</p>
-		<div class="flex justify-end mt-2">
-			<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="cancel">
-				CANCEL
-			</button>
-		</div>
-	</div>
-	<div v-else class="border border-slate-800 bg-slate-900 p-3 font-mono text-[12px]">
-		<div class="flex items-baseline justify-between gap-2 min-w-0">
-			<p class="text-[13px] font-bold text-slate-200 truncate" :title="deviceName">
-				{{ deviceName }}
-			</p>
-			<p class="text-slate-500 shrink-0">
-				{{ t.state.toUpperCase() }}
-			</p>
-		</div>
-		<TransportBadge :transport="t.transport" />
 
-		<div v-if="isActive" class="mt-2">
-			<div class="flex justify-between text-slate-400" aria-live="polite">
-				<span class="text-sky-300">{{ isSending ? 'TX' : 'RX' }} {{ humanSize(speedBps) }}/s</span>
-				<span class="tabular-nums">{{ humanSize(meta?.ack_bytes ?? 0) }} / {{ humanSize(meta?.total_bytes ?? 0) }}</span>
-				<span class="tabular-nums">ETA {{ eta }}</span>
-			</div>
-			<div
-				class="grid mt-1" :style="{ gridTemplateColumns: `repeat(${BLOCKS}, minmax(0,1fr))`, gap: '2px' }" role="progressbar" :aria-valuenow="Math.round(frac * 100)"
-				aria-valuemin="0" aria-valuemax="100">
-				<span
-					v-for="i in BLOCKS" :key="i" class="h-3"
-					:class="i <= filledBlocks ? 'bg-sky-400' : 'bg-slate-800'" />
-			</div>
-			<ul class="mt-1 text-slate-400">
-				<li v-for="(f, i) in files.slice(0, 3)" :key="`${f}-${i}`" class="truncate" :title="f">
-					+ {{ baseName(f) }}
-				</li>
-			</ul>
-			<div class="flex justify-end mt-2">
-				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="cancel">
-					CANCEL
-				</button>
-			</div>
-		</div>
+			<template v-else-if="isActive">
+				<div
+					class="mt-2 h-1.5 overflow-hidden rounded-full bg-raise" role="progressbar"
+					:aria-valuenow="Math.round(frac * 100)" aria-valuemin="0" aria-valuemax="100"
+					:aria-label="`Progress ${Math.round(frac * 100)}%`">
+					<div
+						class="h-full rounded-full transition-[width] duration-300" :class="isSending ? 'bg-tx' : 'bg-rx'"
+						:style="{ width: `${frac * 100}%` }" />
+				</div>
+				<div class="mt-1 flex justify-between gap-2 font-mono text-[11px] tabular-nums text-dim">
+					<span>{{ humanSize(meta?.ack_bytes ?? 0) }} / {{ humanSize(meta?.total_bytes ?? 0) }}</span>
+					<span>ETA {{ eta }}</span>
+				</div>
+				<ul class="mt-1 font-mono text-[11px] text-faint">
+					<li v-for="(f, i) in files.slice(0, 3)" :key="`${f}-${i}`" class="truncate" :title="f">
+						{{ baseName(f) }}
+					</li>
+				</ul>
+				<div class="mt-2 flex justify-end">
+					<button type="button" class="qsd-action qsd-action-cancel" @click="cancel">
+						CANCEL
+					</button>
+				</div>
+			</template>
 
-		<div v-else-if="isFinished" class="mt-1 text-slate-300">
-			<p>
-				<span v-if="meta?.payload_kind === 'Files'">RX {{ files.length }} FILE{{ files.length === 1 ? '' : 'S' }}</span>
-				<span v-else-if="meta?.payload_kind === 'Text'">RX TEXT</span>
-				<span v-else-if="meta?.payload_kind === 'Url'">RX LINK</span>
-				<span v-else-if="meta?.payload_kind === 'WiFi'">RX WI-FI{{ meta?.wifi_ssid ? ` · ${meta.wifi_ssid}` : '' }}</span>
-				<span v-else>RX DONE</span>
-				<span v-if="(meta?.total_bytes ?? 0) > 0" class="text-slate-500 tabular-nums"> · {{ humanSize(meta?.total_bytes ?? 0) }}</span>
-			</p>
-			<div class="flex justify-end gap-2 mt-2">
+			<div v-else-if="isFinished" class="mt-2 flex flex-wrap justify-end gap-2">
 				<template v-if="meta?.payload_kind === 'Files'">
 					<button
 						v-if="t.kind === 'Inbound' && files.length === 1"
-						type="button"
-						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
-						@click="openFile">
+						type="button" class="qsd-action" @click="openFile">
 						OPEN FILE
 					</button>
 					<button
 						v-if="t.kind === 'Inbound' && files.length > 0"
-						type="button"
-						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
-						@click="openFolder">
+						type="button" class="qsd-action" @click="openFolder">
 						OPEN FOLDER
 					</button>
 				</template>
 				<button
 					v-else-if="meta?.url"
-					type="button"
-					class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
-					@click="openTarget">
+					type="button" class="qsd-action" @click="openTarget">
 					OPEN
 				</button>
 				<button
 					v-if="(meta?.payload_kind === 'Text' || meta?.payload_kind === 'Url') && (meta?.text || meta?.url || meta?.payload_preview)"
-					type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="copyText">
+					type="button" class="qsd-action" @click="copyText">
 					{{ meta?.payload_kind === 'Url' ? 'COPY LINK' : 'COPY' }}
 				</button>
-				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="clear">
+				<button type="button" class="qsd-action" @click="clear">
+					CLEAR
+				</button>
+			</div>
+
+			<div v-else-if="isTerminalError" class="mt-2 flex justify-end">
+				<button type="button" class="qsd-action" @click="clear">
 					CLEAR
 				</button>
 			</div>
 		</div>
-
-		<div v-else-if="isTerminalError" class="mt-1 text-slate-400">
-			<p>{{ t.state === 'Cancelled' ? 'TX CANCELLED' : t.state === 'Rejected' ? 'TX REJECTED' : 'LINK LOST' }}</p>
-			<div class="flex justify-end mt-2">
-				<button type="button" class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="clear">
-					CLEAR
-				</button>
-			</div>
-		</div>
-
-		<div v-else class="mt-1 text-slate-500" aria-live="polite">
-			HANDSHAKE…
-		</div>
-	</div>
+	</article>
 </template>
