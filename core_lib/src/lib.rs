@@ -175,16 +175,31 @@ impl RQS {
             }
         }
 
-        // Start MDnsServer in own "task"
-        let mut mdns = MDnsServer::new(
-            endpoint_id[..4].try_into()?,
-            binded_addr.port(),
-            self.ble_sender.subscribe(),
-            self.visibility_sender.clone(),
-            self.visibility_receiver.clone(),
-        )?;
+        // Start MDnsServer in own "task", restarted (with a new mDNS daemon) whenever it stops:
+        // the daemon thread panics on some malformed packets from other hosts (see hdl/mdns.rs).
+        let mdns_endpoint_id: [u8; 4] = endpoint_id[..4].try_into()?;
+        let mdns_port = binded_addr.port();
+        let mdns_ble_sender = self.ble_sender.clone();
+        let mdns_visibility_sender = self.visibility_sender.clone();
+        let mdns_visibility_receiver = self.visibility_receiver.clone();
         let ctk = ctoken.clone();
-        tracker.spawn(async move { mdns.run(ctk).await });
+        tracker.spawn(supervise(
+            "MDnsServer",
+            ctk.clone(),
+            RESTART_BACKOFF_MIN,
+            RESTART_BACKOFF_MAX,
+            move || {
+                let mdns = MDnsServer::new(
+                    mdns_endpoint_id,
+                    mdns_port,
+                    mdns_ble_sender.subscribe(),
+                    mdns_visibility_sender.clone(),
+                    mdns_visibility_receiver.clone(),
+                );
+                let ctk = ctk.clone();
+                async move { mdns?.run(ctk).await }
+            },
+        ));
 
         // Advertise as a discoverable QuickShare receiver over BLE (0xFEF3) so a
         // phone that drops off Wi-Fi during its browse phase (the Pixel "AirDrop
@@ -245,42 +260,54 @@ impl RQS {
                 let gatt_advert = advert.clone();
                 let gatt_sender = self.message_sender.clone();
                 let gatt_tcp_port = binded_addr.port();
+                // Both BLE tasks are restarted when they stop or can't start (Bluetooth off at
+                // startup, adapter gone after a resume or a bluetoothd restart).
                 let gctk = ctoken.clone();
-                tracker.spawn(async move {
-                    match crate::hdl::ReceiverGattServer::new(
-                        gatt_advert,
-                        gatt_sender,
-                        gatt_tcp_port,
-                    )
-                    .await
-                    {
-                        Ok(srv) => {
-                            if let Err(e) = srv.run(gctk).await {
-                                error!("ReceiverGattServer: {}", e);
-                            }
+                tracker.spawn(supervise(
+                    "ReceiverGattServer",
+                    gctk.clone(),
+                    RESTART_BACKOFF_MIN,
+                    RESTART_BACKOFF_MAX,
+                    move || {
+                        let (gatt_advert, gatt_sender) = (gatt_advert.clone(), gatt_sender.clone());
+                        let gctk = gctk.clone();
+                        async move {
+                            crate::hdl::ReceiverGattServer::new(
+                                gatt_advert,
+                                gatt_sender,
+                                gatt_tcp_port,
+                            )
+                            .await
+                            .map_err(|e| anyhow!("couldn't init: {e}"))?
+                            .run(gctk)
+                            .await
                         }
-                        Err(e) => error!("Couldn't init ReceiverGattServer: {}", e),
-                    }
-                });
+                    },
+                ));
 
                 // BLE receiver advertisement (0xFEF3).
                 let ctk = ctoken.clone();
-                tracker.spawn(async move {
-                    match crate::hdl::ReceiverAdvertiser::new(
-                        rx_endpoint_id,
-                        crate::utils::DeviceType::Laptop as u8,
-                        &rx_device_name,
-                    )
-                    .await
-                    {
-                        Ok(adv) => {
-                            if let Err(e) = adv.run(ctk).await {
-                                error!("ReceiverAdvertiser: {}", e);
-                            }
+                tracker.spawn(supervise(
+                    "ReceiverAdvertiser",
+                    ctk.clone(),
+                    RESTART_BACKOFF_MIN,
+                    RESTART_BACKOFF_MAX,
+                    move || {
+                        let rx_device_name = rx_device_name.clone();
+                        let ctk = ctk.clone();
+                        async move {
+                            crate::hdl::ReceiverAdvertiser::new(
+                                rx_endpoint_id,
+                                crate::utils::DeviceType::Laptop as u8,
+                                &rx_device_name,
+                            )
+                            .await
+                            .map_err(|e| anyhow!("couldn't init: {e}"))?
+                            .run(ctk)
+                            .await
                         }
-                        Err(e) => error!("Couldn't init ReceiverAdvertiser: {}", e),
-                    }
-                });
+                    },
+                ));
             }
         }
 
@@ -378,5 +405,144 @@ impl RQS {
 
     pub fn get_device_name(&self) -> String {
         DEVICE_NAME.read().unwrap().clone()
+    }
+}
+
+const RESTART_BACKOFF_MIN: std::time::Duration = std::time::Duration::from_secs(1);
+const RESTART_BACKOFF_MAX: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Delay before the next restart of a supervised task: doubles up to `max`, and starts again
+/// from `min` when the task had been running for at least `max` (a fresh failure, not a loop).
+fn next_backoff(
+    delay: std::time::Duration,
+    ran_for: std::time::Duration,
+    min: std::time::Duration,
+    max: std::time::Duration,
+) -> std::time::Duration {
+    if ran_for >= max {
+        min
+    } else {
+        (delay * 2).min(max)
+    }
+}
+
+/// Runs the task built by `make` until `ctk` is cancelled, restarting it with a backoff
+/// (`min` doubling up to `max`) whenever it returns, with an error or not, before that. The
+/// announcement tasks (mDNS, BLE) run under this: a dead one leaves the laptop invisible until
+/// the app restarts, and before they ended silently (the spawned task's result was dropped).
+async fn supervise<F, Fut>(
+    name: &'static str,
+    ctk: CancellationToken,
+    min: std::time::Duration,
+    max: std::time::Duration,
+    mut make: F,
+) where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<(), anyhow::Error>>,
+{
+    let mut delay = min;
+    loop {
+        // Not raced against `ctk`: the task handles cancellation itself (mDNS sends its goodbye).
+        let started = tokio::time::Instant::now();
+        let res = make().await;
+        if ctk.is_cancelled() {
+            return;
+        }
+
+        delay = next_backoff(delay, started.elapsed(), min, max);
+        match res {
+            Ok(()) => warn!("{name}: stopped, restarting in {delay:?}"),
+            Err(e) => warn!("{name}: {e:#}; restarting in {delay:?}"),
+        }
+        tokio::select! {
+            _ = ctk.cancelled() => return,
+            _ = tokio::time::sleep(delay) => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    use super::*;
+
+    const MS: Duration = Duration::from_millis(1);
+
+    #[test]
+    fn backoff_doubles_up_to_max_and_resets_after_a_long_run() {
+        let (min, max) = (Duration::from_secs(1), Duration::from_secs(30));
+        let mut delay = min;
+        let mut seen = vec![];
+        for _ in 0..7 {
+            delay = next_backoff(delay, Duration::ZERO, min, max);
+            seen.push(delay.as_secs());
+        }
+        assert_eq!(seen, [2, 4, 8, 16, 30, 30, 30]);
+        assert_eq!(next_backoff(max, Duration::from_secs(3600), min, max), min);
+    }
+
+    #[tokio::test]
+    async fn supervise_restarts_a_failing_task_until_it_keeps_running() {
+        let ctk = CancellationToken::new();
+        let runs = Arc::new(AtomicUsize::new(0));
+        let (r, c) = (runs.clone(), ctk.clone());
+        let sup = tokio::spawn(supervise("test", ctk.clone(), MS, 4 * MS, move || {
+            let (r, c) = (r.clone(), c.clone());
+            async move {
+                // Fails three times (error, early return, error), then runs until cancelled.
+                match r.fetch_add(1, Ordering::SeqCst) {
+                    0 | 2 => Err(anyhow!("boom")),
+                    1 => Ok(()),
+                    _ => {
+                        c.cancelled().await;
+                        Ok(())
+                    }
+                }
+            }
+        }));
+
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while runs.load(Ordering::SeqCst) < 4 {
+                tokio::time::sleep(MS).await;
+            }
+        })
+        .await
+        .expect("the task was not restarted");
+        ctk.cancel();
+        tokio::time::timeout(Duration::from_secs(5), sup)
+            .await
+            .expect("supervise did not stop on cancel")
+            .unwrap();
+        assert_eq!(runs.load(Ordering::SeqCst), 4);
+    }
+
+    #[tokio::test]
+    async fn supervise_stops_during_the_backoff_when_cancelled() {
+        let ctk = CancellationToken::new();
+        let runs = Arc::new(AtomicUsize::new(0));
+        let r = runs.clone();
+        let sup = tokio::spawn(supervise(
+            "test",
+            ctk.clone(),
+            Duration::from_secs(3600),
+            Duration::from_secs(3600),
+            move || {
+                r.fetch_add(1, Ordering::SeqCst);
+                async { Err(anyhow!("boom")) }
+            },
+        ));
+
+        while runs.load(Ordering::SeqCst) < 1 {
+            tokio::time::sleep(MS).await;
+        }
+        ctk.cancel();
+        tokio::time::timeout(Duration::from_secs(5), sup)
+            .await
+            .expect("supervise kept sleeping after cancel")
+            .unwrap();
+        assert_eq!(runs.load(Ordering::SeqCst), 1);
     }
 }
