@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-shell';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { useToastStore } from '../vue_lib/stores/useToastStore';
@@ -123,18 +124,63 @@ async function copyText() {
 	}
 }
 
-async function openTarget() {
-	const url = meta.value?.url ?? null;
-	const fileHint = files.value[0] ?? null;
-	const target = url ?? fileHint;
-	if (!target) return;
+function errorMessage(e: unknown): string {
+	if (typeof e === 'string') return e;
+	if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
+		return (e as { message: string }).message;
+	}
+	if (e instanceof Error) return e.message;
+	return 'Could not open target';
+}
+
+function isHttpUrl(url: string): boolean {
+	return /^https?:\/\//i.test(url);
+}
+
+async function openFile() {
+	const fileName = files.value[0];
+	if (!fileName) return;
 	try {
-		await open(target);
+		await invoke('qsd_open_path', { name: fileName, reveal: false });
 	} catch (e) {
-		toasts.addToast('Could not open target', ToastType.Error);
+		toasts.addToast(errorMessage(e), ToastType.Error);
 		console.error(e);
 	}
 }
+
+async function openFolder() {
+	const fileName = files.value.length === 1 ? files.value[0] : null;
+	try {
+		await invoke('qsd_open_path', { name: fileName, reveal: true });
+	} catch (e) {
+		toasts.addToast(errorMessage(e), ToastType.Error);
+		console.error(e);
+	}
+}
+
+async function openTarget() {
+	const url = meta.value?.url ?? null;
+	if (url) {
+		if (!isHttpUrl(url)) {
+			toasts.addToast('Could not open target', ToastType.Error);
+			return;
+		}
+		try {
+			await open(url);
+		} catch (e) {
+			toasts.addToast('Could not open target', ToastType.Error);
+			console.error(e);
+		}
+		return;
+	}
+	if (files.value.length === 1) {
+		await openFile();
+	} else if (files.value.length > 1) {
+		await openFolder();
+	}
+}
+
+defineExpose({ openFile, openFolder, openTarget });
 </script>
 
 <template>
@@ -205,9 +251,27 @@ async function openTarget() {
 				<span v-if="(meta?.total_bytes ?? 0) > 0" class="text-slate-500 tabular-nums"> · {{ humanSize(meta?.total_bytes ?? 0) }}</span>
 			</p>
 			<div class="flex justify-end gap-2 mt-2">
+				<template v-if="meta?.payload_kind === 'Files'">
+					<button
+						v-if="files.length === 1"
+						type="button"
+						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
+						@click="openFile">
+						OPEN FILE
+					</button>
+					<button
+						v-if="files.length > 0"
+						type="button"
+						class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
+						@click="openFolder">
+						OPEN FOLDER
+					</button>
+				</template>
 				<button
-					v-if="meta?.url || files.length > 0" type="button"
-					class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300" @click="openTarget">
+					v-else-if="meta?.url"
+					type="button"
+					class="border border-slate-600 px-3 py-1 text-slate-300 hover:border-slate-300"
+					@click="openTarget">
 					OPEN
 				</button>
 				<button

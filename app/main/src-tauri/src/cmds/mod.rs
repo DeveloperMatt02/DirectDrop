@@ -16,3 +16,5 @@ mod send_to_rs;
 pub use send_to_rs::*;
 mod settings;
 pub use settings::*;
+mod open_path;
+pub use open_path::*;

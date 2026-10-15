@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
@@ -71,6 +72,143 @@ mod dest_name_tests {
     }
 }
 
+#[cfg(test)]
+mod inbound_cleanup_tests {
+    use super::*;
+    use crate::hdl::info::InternalFileInfo;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn fresh_temp_dir() -> PathBuf {
+        static N: AtomicU64 = AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "rqs-inbound-cleanup-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// An entry as left by `accept_transfer`: the file exists on disk and the
+    /// handle is open. With `created = false` the entry owns no file yet
+    /// (rejection before accept).
+    fn entry(dir: &PathBuf, name: &str, payload_id: i64, created: bool) -> (i64, InternalFileInfo) {
+        let file_url = dir.join(name);
+        let file = if created {
+            std::fs::write(&file_url, b"partial").unwrap();
+            Some(File::create(&file_url).unwrap())
+        } else {
+            None
+        };
+        (
+            payload_id,
+            InternalFileInfo {
+                payload_id,
+                file_url,
+                bytes_transferred: 0,
+                total_size: 1024,
+                file,
+            },
+        )
+    }
+
+    #[test]
+    fn keeps_completed_file_and_deletes_partial_one() {
+        let dir = fresh_temp_dir();
+        let mut files = HashMap::new();
+        let (id_done, done) = entry(&dir, "done.bin", 1, true);
+        let (id_partial, partial) = entry(&dir, "partial.bin", 2, true);
+        files.insert(id_done, done);
+        files.insert(id_partial, partial);
+        // Mirror the chunk handler: a finished file is removed from the map.
+        files.remove(&id_done);
+
+        remove_incomplete_files(&mut files);
+
+        assert!(files.is_empty());
+        assert!(dir.join("done.bin").exists());
+        assert!(!dir.join("partial.bin").exists());
+        std::fs::remove_file(dir.join("done.bin")).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+    }
+
+    #[test]
+    fn nothing_created_before_accept_is_noop() {
+        let dir = fresh_temp_dir();
+        let mut files = HashMap::new();
+        let (id, info) = entry(&dir, "never-created.bin", 7, false);
+        files.insert(id, info);
+
+        remove_incomplete_files(&mut files);
+
+        assert!(files.is_empty());
+        assert!(!dir.join("never-created.bin").exists());
+        std::fs::remove_dir(&dir).unwrap();
+    }
+
+    #[test]
+    fn failed_removal_does_not_panic() {
+        let dir = fresh_temp_dir();
+        // remove_file on a directory fails: must be logged, not panicked.
+        let sub = dir.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let mut files = HashMap::new();
+        files.insert(
+            9,
+            InternalFileInfo {
+                payload_id: 9,
+                file_url: sub.clone(),
+                bytes_transferred: 0,
+                total_size: 8,
+                file: Some(File::create(dir.join("handle.bin")).unwrap()),
+            },
+        );
+
+        remove_incomplete_files(&mut files);
+
+        assert!(files.is_empty());
+        assert!(sub.exists());
+        std::fs::remove_file(dir.join("handle.bin")).unwrap();
+        std::fs::remove_dir(&sub).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+    }
+
+    fn session_with_state(state: TransferState) -> (InboundRequest<tokio::io::DuplexStream>, PathBuf) {
+        let (tx, _) = tokio::sync::broadcast::channel(8);
+        let (sock, _) = tokio::io::duplex(1024);
+        let mut ir = InboundRequest::new(sock, "test".to_string(), tx);
+        ir.state.state = state;
+        let dir = fresh_temp_dir();
+        let (id, info) = entry(&dir, "partial.bin", 3, true);
+        ir.state.transferred_files.insert(id, info);
+        (ir, dir)
+    }
+
+    #[test]
+    fn cleanup_skips_finished_transfers() {
+        let (mut ir, dir) = session_with_state(TransferState::Finished);
+
+        ir.cleanup_incomplete_files();
+
+        assert!(dir.join("partial.bin").exists());
+        assert!(!ir.state.transferred_files.is_empty());
+        ir.state.transferred_files.clear();
+        std::fs::remove_file(dir.join("partial.bin")).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+    }
+
+    #[test]
+    fn cleanup_runs_on_cancelled_transfer() {
+        let (mut ir, dir) = session_with_state(TransferState::Cancelled);
+
+        ir.cleanup_incomplete_files();
+
+        assert!(ir.state.transferred_files.is_empty());
+        assert!(!dir.join("partial.bin").exists());
+        std::fs::remove_dir(&dir).unwrap();
+    }
+}
+
 /// Pick the on-disk name for a received file: keep the sender's name, but if its
 /// extension is missing or generic (e.g. a `.tmp` cache file), fix it from the
 /// declared MIME type so e.g. a PDF sent as `cache123.tmp` lands as `cache123.pdf`.
@@ -117,6 +255,25 @@ pub fn peek_client_introduction(buf: &[u8]) -> Option<String> {
         return None;
     }
     Some(bwu.client_introduction?.endpoint_id().to_string())
+}
+
+/// Delete every file tracked in `files` from disk. The map holds exactly the
+/// incomplete files (completed ones are removed on their final chunk, and
+/// entries registered before consent own no file yet and are skipped). The
+/// open handle is closed before removing the path; failures are only logged,
+/// never panicked, so cleanup can run on every error path and in Drop.
+fn remove_incomplete_files(files: &mut HashMap<i64, InternalFileInfo>) {
+    for (_, mut info) in files.drain() {
+        if info.file.take().is_none() {
+            continue;
+        }
+        if let Err(e) = std::fs::remove_file(&info.file_url) {
+            warn!(
+                "inbound: couldn't delete incomplete file {:?}: {e}",
+                info.file_url
+            );
+        }
+    }
 }
 
 /// Read one length-prefixed `[4-byte len][frame]` message from a stream (plaintext).
@@ -177,11 +334,32 @@ pub struct InboundRequest<S = TcpStream> {
     hotspot_task: Option<tokio::task::JoinHandle<Result<crate::hdl::Hotspot, anyhow::Error>>>,
 }
 
-/// A hotspot still being started when the request ends (transfer cancelled before the upgrade)
-/// must not be left running.
-#[cfg(all(feature = "experimental", target_os = "linux"))]
+impl<S> InboundRequest<S> {
+    /// Delete partially received files after an unsuccessful transfer.
+    /// Completed files were already removed from `transferred_files` when
+    /// their final chunk arrived, so only incomplete files are deleted and
+    /// finished multi-file transfers keep what completed. Files from other
+    /// transfers are never touched: every path here was uniquely resolved
+    /// ("name (1).ext") and created by this transfer.
+    fn cleanup_incomplete_files(&mut self) {
+        if self.state.state == TransferState::Finished {
+            return;
+        }
+        remove_incomplete_files(&mut self.state.transferred_files);
+    }
+}
+
+/// Safety net: if the session ends (error, disconnect, task abort) without
+/// completing, delete the partially received files. Finished transfers are
+/// untouched, and a successful bandwidth upgrade never drops the session
+/// (the loop keeps running on the swapped socket), so upgraded transfers
+/// are unaffected.
 impl<S> Drop for InboundRequest<S> {
     fn drop(&mut self) {
+        self.cleanup_incomplete_files();
+        // A hotspot still being started when the request ends (transfer cancelled before the upgrade)
+        // must not be left running.
+        #[cfg(all(feature = "experimental", target_os = "linux"))]
         if let Some(task) = self.hotspot_task.take() {
             if let Ok(rt) = tokio::runtime::Handle::try_current() {
                 rt.spawn(async move {
@@ -409,6 +587,19 @@ impl<S: AsyncRead + AsyncWrite + Unpin> InboundRequest<S> {
     }
 
     pub async fn handle(&mut self) -> Result<(), anyhow::Error> {
+        // Every Err below ends the session (the callers break the loop on
+        // the first error), so this is the single point where incomplete
+        // files are deleted. A successful bandwidth upgrade never passes
+        // through here with an error: do_bwu() returns Ok and the loop
+        // keeps running on the swapped socket.
+        let res = self.handle_event().await;
+        if res.is_err() {
+            self.cleanup_incomplete_files();
+        }
+        res
+    }
+
+    async fn handle_event(&mut self) -> Result<(), anyhow::Error> {
         // The socket branch below must be cancel-safe: the channel branch fires for every state
         // update the library broadcasts (many per second while receiving), and a cancelled
         // read_exact() would drop the bytes already read and desync the stream (transfers then

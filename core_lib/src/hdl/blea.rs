@@ -188,6 +188,12 @@ impl ReceiverAdvertiser {
                     }
                 }
                 Err(e) => {
+                    // Adapter object gone (bluetoothd restarted, controller re-enumerated after a
+                    // resume): retrying on it never succeeds, the caller starts over on the
+                    // current default adapter.
+                    if let Err(pe) = self.adapter.is_powered().await {
+                        return Err(anyhow::anyhow!("advertise failed ({e}), adapter gone ({pe})"));
+                    }
                     warn!("{RX_INNER_NAME}: advertise failed ({e}); retrying");
                     tokio::select! {
                         _ = ctk.cancelled() => return Ok(()),

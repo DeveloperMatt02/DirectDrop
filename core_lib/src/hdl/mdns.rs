@@ -1,7 +1,8 @@
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-use mdns_sd::{AddrType, ServiceDaemon, ServiceInfo};
+use anyhow::anyhow;
+use mdns_sd::{AddrType, DaemonEvent, ServiceDaemon, ServiceInfo};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::watch;
 use tokio::time::{Instant, interval_at};
@@ -12,6 +13,7 @@ use crate::utils::{DeviceType, gen_mdns_endpoint_info, gen_mdns_name};
 
 const INNER_NAME: &str = "MDnsServer";
 const TICK_INTERVAL: Duration = Duration::from_secs(60);
+const SUSPEND_CHECK: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Visibility {
@@ -59,12 +61,20 @@ impl MDnsServer {
         })
     }
 
+    /// Runs until `ctk` is cancelled. Returns an error when the mDNS daemon is gone (its thread
+    /// panics on some malformed packets, see `dns_parser.rs` in mdns-sd: unchecked slicing on
+    /// RDLENGTH) or after a suspend: the caller then starts over with a new `MDnsServer`.
     pub async fn run(&mut self, ctk: CancellationToken) -> Result<(), anyhow::Error> {
         info!("{INNER_NAME}: service starting");
         let monitor = self.daemon.monitor()?;
-        let ble_receiver = &mut self.ble_receiver;
-        let mut visibility = *self.visibility_receiver.borrow();
+        // Mark the current value as seen and apply it here, so a restarted server announces too.
+        let mut visibility = *self.visibility_receiver.borrow_and_update();
+        if visibility != Visibility::Invisible {
+            self.announce();
+        }
         let mut interval = interval_at(Instant::now() + TICK_INTERVAL, TICK_INTERVAL);
+        let mut suspend_check = interval_at(Instant::now() + SUSPEND_CHECK, SUSPEND_CHECK);
+        let (mut wall, mut mono) = (SystemTime::now(), Instant::now());
 
         loop {
             tokio::select! {
@@ -74,8 +84,18 @@ impl MDnsServer {
                 }
                 r = monitor.recv_async() => {
                     match r {
+                        // The daemon adds a new address to the service but only announces it
+                        // when asked: announce on the new interface (Wi-Fi back after a transfer
+                        // over Wi-Fi Direct or the hotspot, NetworkManager reconnecting).
+                        Ok(DaemonEvent::IpAdd(ip)) => {
+                            if visibility != Visibility::Invisible {
+                                debug!("{INNER_NAME}: new address {ip}, announcing again");
+                                self.announce();
+                            }
+                        }
+                        Ok(DaemonEvent::Error(e)) => warn!("{INNER_NAME}: daemon: {e}"),
                         Ok(_) => continue,
-                        Err(err) => return Err(err.into()),
+                        Err(_) => return Err(anyhow!("mDNS daemon stopped")),
                     }
                 },
                 _ = self.visibility_receiver.changed() => {
@@ -83,16 +103,15 @@ impl MDnsServer {
 
                     debug!("{INNER_NAME}: visibility changed: {visibility:?}");
                     if visibility == Visibility::Visible {
-                        self.daemon.register(self.service_info.clone())?;
+                        self.announce();
                     } else if visibility == Visibility::Invisible {
-                        let receiver = self.daemon.unregister(self.service_info.get_fullname())?;
-                        let _ = receiver.recv();
+                        self.withdraw().await;
                     } else if visibility == Visibility::Temporarily {
-                        self.daemon.register(self.service_info.clone())?;
+                        self.announce();
                         interval.reset();
                     }
                 }
-                _ = ble_receiver.recv() => {
+                _ = self.ble_receiver.recv() => {
                     if visibility == Visibility::Invisible {
                         continue;
                     }
@@ -102,9 +121,12 @@ impl MDnsServer {
                         // Android can sometime not see the mDNS service if the service
                         // was running BEFORE Android started the Discovery phase for QuickShare.
                         // So resend a broadcast if there's a android device sending.
-                        self.daemon.register_resend(self.service_info.get_fullname())?;
+                        let fullname = self.service_info.get_fullname();
+                        if let Err(e) = self.daemon.register_resend(fullname) {
+                            warn!("{INNER_NAME}: register_resend failed: {e}");
+                        }
                     } else {
-                        self.daemon.register(self.service_info.clone())?;
+                        self.announce();
                     }
                 },
                 _ = interval.tick() => {
@@ -112,20 +134,45 @@ impl MDnsServer {
                         continue;
                     }
 
-                    let receiver = self.daemon.unregister(self.service_info.get_fullname())?;
-                    let _ = receiver.recv();
+                    self.withdraw().await;
                     let _ = self.visibility_sender.lock().unwrap().send(Visibility::Invisible);
+                }
+                _ = suspend_check.tick() => {
+                    // The monotonic clock stops during a suspend, the wall clock doesn't. After a
+                    // resume the interfaces may be new while the daemon still holds the sockets
+                    // (and multicast memberships) of the old ones: start over with a new daemon.
+                    let slept = wall.elapsed().unwrap_or_default().saturating_sub(mono.elapsed());
+                    (wall, mono) = (SystemTime::now(), Instant::now());
+                    if slept > SUSPEND_CHECK {
+                        return Err(anyhow!("resumed after ~{}s of suspend", slept.as_secs()));
+                    }
                 }
             }
         }
 
         // Unregister the mDNS service - we're shutting down
-        let receiver = self.daemon.unregister(self.service_info.get_fullname())?;
-        if let Ok(event) = receiver.recv() {
-            info!("MDnsServer: service unregistered: {:?}", &event);
-        }
+        self.withdraw().await;
 
         Ok(())
+    }
+
+    /// (Re-)announces the service: `register` reads the current interface addresses again and
+    /// sends the announcement on every interface. Errors are logged: the next event retries.
+    fn announce(&self) {
+        if let Err(e) = self.daemon.register(self.service_info.clone()) {
+            warn!("{INNER_NAME}: register failed: {e}");
+        }
+    }
+
+    async fn withdraw(&self) {
+        match self.daemon.unregister(self.service_info.get_fullname()) {
+            Ok(receiver) => {
+                if let Ok(event) = receiver.recv_async().await {
+                    info!("{INNER_NAME}: service unregistered: {:?}", &event);
+                }
+            }
+            Err(e) => warn!("{INNER_NAME}: unregister failed: {e}"),
+        }
     }
 
     fn build_service(
@@ -152,5 +199,12 @@ impl MDnsServer {
         .enable_addr_auto(AddrType::V4);
 
         Ok(si)
+    }
+}
+
+impl Drop for MDnsServer {
+    // Without this the daemon thread outlives the server (after a restart, or `RQS::stop`).
+    fn drop(&mut self) {
+        let _ = self.daemon.shutdown();
     }
 }
