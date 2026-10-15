@@ -17,21 +17,25 @@ const addr = computed(() => {
 </script>
 
 <template>
-	<div class="border border-slate-700 bg-slate-950 p-3 flex items-center gap-3 min-w-0">
-		<svg width="26" height="34" viewBox="0 0 26 38" fill="none" stroke="#94a3b8" stroke-width="1.2" class="shrink-0" aria-hidden="true">
-			<rect x="3" y="2" width="20" height="34" rx="2" />
-			<circle cx="13" cy="31" r="1.2" fill="#94a3b8" stroke="none" />
+	<div class="flex min-w-0 items-center gap-3 rounded-lg border border-seam bg-ground px-3 py-2">
+		<svg
+			width="18" height="26" viewBox="0 0 26 38"
+			fill="none" class="shrink-0 stroke-faint" stroke-width="1.6" aria-hidden="true">
+			<rect
+				x="3" y="2" width="20"
+				height="34" rx="3" />
+			<path d="M10 31h6" stroke-linecap="round" />
 		</svg>
-		<span class="flex-1 min-w-0">
+		<span class="min-w-0 flex-1">
 			<span class="flex items-center gap-2">
-				<span class="font-mono text-[13px] font-bold text-slate-100 truncate">{{ label }}</span>
-				<span class="font-mono text-[10px] border border-emerald-700 text-emerald-400 px-1.5 py-px shrink-0">LAN</span>
+				<span class="truncate text-[13px] font-semibold text-ink">{{ label }}</span>
+				<span class="shrink-0 rounded-full border border-seam px-1.5 font-mono text-[10px] text-dim">LAN</span>
 			</span>
-			<span class="font-mono text-[11px] text-slate-500 tabular-nums truncate block">{{ addr }}</span>
+			<span class="block truncate font-mono text-[11px] tabular-nums text-faint">{{ addr }}</span>
 		</span>
 		<button
 			type="button" :disabled="disabled"
-			class="font-mono text-[12px] font-bold bg-sky-950 border border-sky-600 text-sky-300 px-4 py-1.5 shrink-0 hover:bg-sky-900 disabled:opacity-40"
+			class="qsd-action qsd-action-primary shrink-0"
 			:aria-label="`Send staged files to ${label}`"
 			@click="emit('select', endpoint.id)">
 			SEND

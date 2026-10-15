@@ -115,112 +115,75 @@ async function selectBle(receiverId: string) {
 </script>
 
 <template>
-	<section aria-label="Nearby devices" class="border border-slate-800 bg-slate-900 p-4 flex flex-col gap-3 min-h-0">
-		<div class="flex items-baseline justify-between">
-			<h2 class="font-mono text-[11px] tracking-[0.2em] text-slate-400">
+	<section aria-label="Nearby devices" class="flex min-h-0 min-w-0 flex-col gap-2">
+		<div class="flex items-baseline justify-between gap-2">
+			<h2 class="font-mono text-[11px] font-semibold tracking-[0.2em] text-dim">
 				NEARBY DEVICES · {{ endpoints.length }}
 			</h2>
-			<span v-if="bleHint !== null" class="font-mono text-[11px] text-emerald-400 tabular-nums">BLE HINT · {{ bleHint }}s AGO</span>
-			<span v-else class="font-mono text-[11px] text-slate-600">BLE · NO HINT</span>
+			<span v-if="bleHint !== null" class="font-mono text-[11px] tabular-nums text-rx">BLE HINT · {{ bleHint }}s AGO</span>
+			<span v-else class="font-mono text-[11px] text-faint">BLE · NO HINT</span>
 		</div>
-		<p v-if="!hasStaged" class="font-mono text-[11px] text-slate-500">
+		<p v-if="!hasStaged" class="font-mono text-[11px] text-faint">
 			STAGE FILES FIRST, THEN PRESS SEND.
 		</p>
-		<div v-if="endpoints.length > 0" class="flex flex-col gap-2" role="list">
+		<div v-if="endpoints.length > 0" class="flex flex-col gap-1.5" role="list">
 			<DeviceRow
 				v-for="ep in endpoints" :key="ep.id" :endpoint="ep" role="listitem"
 				:disabled="!hasStaged" @select="selectEndpoint" />
 		</div>
-		<p v-else class="border border-dashed border-slate-700 p-3 font-mono text-[11px] text-slate-500">
+		<p v-else class="rounded-lg border border-dashed border-seam px-3 py-2 font-mono text-[11px] text-faint">
 			NO PEERS. KEEP THE PHONE RECEIVE SCREEN OPEN, BOTH UNLOCKED.
 		</p>
 
-		<div class="flex items-baseline justify-between pt-2 border-t border-slate-800">
-			<h2 class="font-mono text-[11px] tracking-[0.2em] text-slate-400">
+		<div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-seam pt-2">
+			<h2 class="font-mono text-[11px] font-semibold tracking-[0.2em] text-dim">
 				NEARBY OVER BLUETOOTH · {{ bleSorted.length }}
 			</h2>
-			<span v-if="lastScanLabel !== null" class="font-mono text-[11px] text-slate-500 tabular-nums">{{ lastScanLabel }}</span>
-		</div>
-		<div class="flex items-center gap-2">
+			<span class="font-mono text-[10px] text-faint">NO SHARED NETWORK NEEDED</span>
+			<span class="flex-1" />
+			<span v-if="lastScanLabel !== null" class="font-mono text-[11px] tabular-nums text-faint">{{ lastScanLabel }}</span>
 			<button
 				type="button" :disabled="scanning"
-				class="font-mono text-[12px] font-bold bg-sky-950 border border-sky-600 text-sky-300 px-4 py-1.5 hover:bg-sky-900 disabled:opacity-40"
+				class="qsd-action"
 				aria-label="Scan for Bluetooth receivers" @click="scanBle">
 				{{ scanning ? 'SCANNING…' : 'SCAN' }}
 			</button>
-			<p class="font-mono text-[10px] text-slate-600">
-				NO SHARED NETWORK NEEDED
-			</p>
 		</div>
-		<div v-if="bleSorted.length > 0" class="flex flex-col gap-2" role="list" aria-label="Bluetooth receivers">
+		<div v-if="bleSorted.length > 0" class="flex flex-col gap-1.5" role="list" aria-label="Bluetooth receivers">
 			<div
 				v-for="r in bleSorted" :key="`${r.endpoint_id}-${r.address}`"
-				class="border border-slate-700 bg-slate-950 p-3 flex items-center gap-3 min-w-0" role="listitem">
+				class="flex min-w-0 items-center gap-3 rounded-lg border border-seam bg-ground px-3 py-2" role="listitem">
 				<svg
-					width="26" height="34" viewBox="0 0 26 38" fill="none"
-					stroke="#94a3b8" stroke-width="1.2" class="shrink-0" aria-hidden="true">
+					width="18" height="26" viewBox="0 0 26 38"
+					fill="none" class="shrink-0 stroke-faint" stroke-width="1.6" aria-hidden="true">
 					<rect
-						x="3" y="2" width="20" height="34"
-						rx="2" />
-					<circle
-						cx="13" cy="31" r="1.2" fill="#94a3b8"
-						stroke="none" />
+						x="3" y="2" width="20"
+						height="34" rx="3" />
+					<path d="M10 31h6" stroke-linecap="round" />
 				</svg>
-				<span class="flex-1 min-w-0">
+				<span class="min-w-0 flex-1">
 					<span class="flex items-center gap-2">
-						<span class="font-mono text-[13px] font-bold text-slate-100 truncate" :title="bleReceiverLabel(r)">{{ bleReceiverLabel(r) }}</span>
-						<span class="font-mono text-[10px] border border-sky-700 text-sky-400 px-1.5 py-px shrink-0">BLE</span>
+						<span class="truncate text-[13px] font-semibold text-ink" :title="bleReceiverLabel(r)">{{ bleReceiverLabel(r) }}</span>
+						<span class="shrink-0 rounded-full border border-seam px-1.5 font-mono text-[10px] text-dim">BLE</span>
 					</span>
-					<span class="font-mono text-[11px] text-slate-500 tabular-nums truncate block" :title="r.address">{{ r.address }}</span>
+					<span class="block truncate font-mono text-[11px] tabular-nums text-faint" :title="r.address">{{ r.address }}</span>
 				</span>
 				<button
 					type="button" :disabled="!hasStaged || scanning || pendingBle !== null"
-					class="font-mono text-[12px] font-bold bg-sky-950 border border-sky-600 text-sky-300 px-4 py-1.5 shrink-0 hover:bg-sky-900 disabled:opacity-40"
+					class="qsd-action qsd-action-primary shrink-0"
 					:aria-label="`Send staged files to ${bleReceiverLabel(r)} over Bluetooth`"
 					@click="selectBle(`${r.endpoint_id}-${r.address}`)">
 					SEND
 				</button>
 			</div>
 		</div>
-		<p v-else-if="lastScanAt === null" class="border border-dashed border-slate-700 p-3 font-mono text-[11px] text-slate-500">
-			NOT SCANNED YET — PRESS SCAN WITH THE PHONE ON ITS RECEIVE SCREEN.
-		</p>
-		<p v-else class="border border-dashed border-slate-700 p-3 font-mono text-[11px] text-slate-500">
-			NONE FOUND — IS THE PHONE ON ITS RECEIVE SCREEN?
-		</p>
-
-		<div class="mt-auto pt-2 border-t border-slate-800">
-			<svg
-				viewBox="0 0 200 100" class="w-full h-[86px]" fill="none" aria-label="Scan radar"
-				role="img">
-				<circle
-					cx="100" cy="100" r="38" stroke="#334155"
-					stroke-width="1" class="radar-ping" />
-				<circle
-					cx="100" cy="100" r="64" stroke="#334155"
-					stroke-width="1" opacity="0.7" />
-				<circle
-					cx="100" cy="100" r="90" stroke="#334155"
-					stroke-width="1" opacity="0.4" />
-				<g class="radar-sweep">
-					<path d="M100 100 L100 12 A88 88 0 0 1 162 38 Z" fill="#38bdf8" opacity="0.18" stroke="none" />
-					<line
-						x1="100" y1="100" x2="100" y2="12"
-						stroke="#38bdf8" stroke-width="1.5" />
-				</g>
-				<circle
-					cx="100" cy="100" r="2.5" fill="#38bdf8"
-					stroke="none" />
-				<circle
-					cx="132" cy="72" r="2" fill="#34d399"
-					stroke="none" class="radar-ping" />
-				<circle
-					cx="70" cy="52" r="2" fill="#34d399"
-					stroke="none" class="radar-ping" />
-			</svg>
-			<p class="font-mono text-[10px] text-slate-600 text-center tracking-[0.25em]">
-				SCAN · LAN
+		<template v-else-if="hasStaged">
+			<p v-if="lastScanAt === null" class="rounded-lg border border-dashed border-seam px-3 py-2 font-mono text-[11px] text-faint">
+				NOT SCANNED YET — PRESS SCAN WITH THE PHONE ON ITS RECEIVE SCREEN.
 			</p>
-		</div>
+			<p v-else class="rounded-lg border border-dashed border-seam px-3 py-2 font-mono text-[11px] text-faint">
+				NONE FOUND — IS THE PHONE ON ITS RECEIVE SCREEN?
+			</p>
+		</template>
 	</section>
 </template>

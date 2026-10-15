@@ -65,31 +65,34 @@ defineExpose({ stageFiles });
 </script>
 
 <template>
-	<section aria-label="Send files" class="border border-slate-800 bg-slate-900 p-4 flex flex-col gap-3">
-		<h2 class="font-mono text-[11px] tracking-[0.2em] text-slate-400">SEND FILES</h2>
+	<section aria-label="Send files" class="flex min-w-0 flex-col gap-2">
+		<h2 class="font-mono text-[11px] font-semibold tracking-[0.2em] text-dim">
+			SEND FILES
+		</h2>
 		<button
 			type="button"
-			class="w-full border border-dashed border-slate-600 p-5 text-left hover:border-sky-400"
-			:class="{ 'border-sky-400 bg-slate-800/50': session.isDragHovering }"
-			@click="openFilePicker" aria-label="Select files to send (or drop files anywhere)">
-			<span class="flex flex-col items-center gap-2 text-center">
-				<svg width="44" height="32" viewBox="0 0 44 32" fill="none" stroke="#38bdf8" stroke-width="1.5" aria-hidden="true">
-					<path d="M22 28v-20M15 13l7-7 7 7" />
-					<path d="M12 12a14 14 0 0 1 20 0" />
-					<path d="M6 18a22 22 0 0 1 32 0" opacity="0.5" />
-					<circle cx="22" cy="29" r="1.5" fill="#38bdf8" stroke="none" />
+			class="flex w-full items-center gap-3 rounded-lg border border-dashed border-seam bg-ground px-3 py-3 text-left hover:border-accent"
+			:class="{ 'qsd-drop-active': session.isDragHovering }"
+			aria-label="Select files to send (or drop files anywhere)" @click="openFilePicker">
+			<span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tx-bg text-tx" aria-hidden="true">
+				<svg
+					width="16" height="16" viewBox="0 0 16 16"
+					fill="none" stroke="currentColor" stroke-width="1.8">
+					<path d="M8 13.5v-10M3.5 7.5 8 3l4.5 4.5" stroke-linecap="round" stroke-linejoin="round" />
 				</svg>
-				<span v-if="!hasStaged" class="font-mono text-[13px] text-slate-200">DROP FILES OR SELECT</span>
-				<span v-else class="font-mono text-[13px] text-slate-200 tabular-nums">
+			</span>
+			<span class="flex min-w-0 flex-1 flex-col gap-0.5">
+				<span v-if="!hasStaged" class="font-mono text-[12px] font-semibold text-ink">DROP FILES OR SELECT</span>
+				<span v-else class="truncate font-mono text-[12px] font-semibold tabular-nums text-ink">
 					{{ stagedFiles.length }} STAGED · {{ baseName(stagedFiles[0]) }}{{ stagedFiles.length > 1 ? ` +${stagedFiles.length - 1}` : '' }}
 				</span>
-				<span class="font-mono text-[11px] text-amber-300">! REGULAR FILES ONLY — FOLDERS REJECTED</span>
-				<span class="font-mono text-[12px] border border-slate-500 px-4 py-1.5 text-slate-200" aria-hidden="true">SELECT</span>
+				<span class="font-mono text-[10px] text-dim">REGULAR FILES ONLY — FOLDERS REJECTED</span>
 			</span>
+			<span class="shrink-0 rounded-md border border-seam px-3 py-1.5 font-mono text-[11px] font-semibold text-ink" aria-hidden="true">SELECT</span>
 		</button>
 		<button
 			v-if="hasStaged" type="button"
-			class="font-mono text-[12px] border border-slate-700 px-3 py-1.5 text-slate-400 self-end hover:border-slate-400 hover:text-slate-200"
+			class="qsd-action self-end"
 			@click="emit('clearSending')">
 			CLEAR STAGED
 		</button>

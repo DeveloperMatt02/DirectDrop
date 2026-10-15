@@ -153,7 +153,7 @@ onBeforeUnmount(() => {
 				<section v-if="pendingConsent.length > 0" aria-label="Incoming requests" class="flex flex-col gap-3">
 					<TransferCard v-for="t in pendingConsent" :key="t.id" :transfer="t" />
 				</section>
-				<div class="grid grid-cols-1 min-[1000px]:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
+				<div class="grid grid-cols-1 min-[1000px]:grid-cols-[300px_minmax(0,1fr)] gap-4 items-start rounded-xl border border-seam bg-panel p-3">
 					<SendPane :staged-files="stagedFiles" @staged="onStaged" @clear-sending="onClearSending" />
 					<DeviceBoard :staged-files="stagedFiles" />
 				</div>
