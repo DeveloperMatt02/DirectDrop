@@ -30,7 +30,6 @@
   <br /><br />
   <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
   <a href="#instalação-rápida-terminal"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
-  <a href="#capturas-de-tela"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
 </div>
@@ -69,22 +68,9 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 Ou escolha o artefato manualmente na [versão mais recente](https://github.com/DeveloperMatt02/DirectDrop/releases/latest).
 
-## 🖥️ Capturas de tela
-
-Janela principal (console em modo de operação: cabeçalho de estado, fluxo ao vivo laptop ⇄ celular, painel de envio, quadro de dispositivos, fila de transferências):
-
 ## GUI + daemon headless: escolha um
 
 Os pacotes da GUI (`.deb` / `.rpm` / `.AppImage`) trazem o próprio receptor embutido; o pacote daemon `quickshare-direct` é o mesmo receptor em modo headless. Executar os dois ao mesmo tempo anuncia o laptop duas vezes com o mesmo nome de dispositivo e faz os dois disputarem os helpers Wi-Fi por usuário (`quickshare-ap@USER`, `quickshare-join@USER`), por isso o `get-directdrop.sh` desativa o daemon (`systemctl --user disable --now quickshare-direct`) sempre que instala um pacote da GUI. A GUI `.deb`/`.rpm` também adiciona o DirectDrop ao menu de aplicativos (pesquise "DirectDrop"); o `.AppImage` não aparece até ser integrado (Gear Lever, appimaged ou um arquivo `.desktop` manual). Para voltar ao modo headless: feche a GUI e execute `systemctl --user enable --now quickshare-direct`.
-
-![DirectDrop main window](docs/screenshots/gui-main.svg)
-
-Transferência recebida — cartão de verificação de PIN UKEY2 com contagem regressiva de 60s e recusa automática:
-
-![DirectDrop consent card](docs/screenshots/gui-consent.svg)
-
-> [!NOTE]
-> São espaços reservados esquemáticos no estilo blueprint do aplicativo. Substitua `docs/screenshots/gui-main.svg` e `docs/screenshots/gui-consent.svg` por capturas reais (`pnpm tauri dev`, capture a janela com captura de tela, salve como `.png` ao lado delas e atualize os links acima).
 
 O guia rápido original continua válido:
 
@@ -110,8 +96,11 @@ O repositório original mantém o antigo app Tauri do rQuickShare em `app/`, mas
 
 ### Stack e visual
 
-- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** A entrada do frontend é `app/main/src/App.vue`; o estado fica nos stores Pinia (`src/stores/session.ts`, `devices.ts`, `transfers.ts`).
-- **Estética técnica de blueprint:** console escuro em modo de operação, métricas tabulares em monospace, diagrama ao vivo do fluxo de rede entre o laptop e o celular (`FlowDiagram.vue` / `FlowHero.vue`), linhas finas de 1px, sem excesso de marketing. Layout: `StatusHeader` → `FlowDiagram` → `SendPane` + `DeviceBoard` → `TransferQueue`, com um rodapé fino de detalhes do receptor (caminho de download, porta).
+- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** A entrada do frontend é `app/main/src/App.vue`; o estado fica nos stores Pinia (`src/stores/session.ts`, `devices.ts`, `transfers.ts`, `transferGroups.ts`).
+- **Layout com barra lateral e atividade:** a barra lateral à esquerda (`StatusHeader.vue`) contém o radar (`FlowHero.vue`, com ondas apenas enquanto o PC está visível), o nome do PC, o seletor **Visible / Temporarily / Hidden**, a pasta de downloads e a porta. A área principal é **Activity**: no topo o cartão de pedido de consentimento, depois o painel de envio compacto (`SendPane.vue` + `DeviceBoard.vue`) e a lista de transferências (`TransferQueue.vue`) agrupada em **NOW / TODAY / EARLIER**, da mais recente para a mais antiga. As strings da interface ficam em inglês maiúsculo.
+- **Tema claro e escuro automático:** segue a configuração do desktop. No Linux lê `org.freedesktop.appearance color-scheme` do portal de configurações (`ashpd`, comando `qsd_system_theme`, evento `qsd://system-theme`), com reserva no `theme()` do Tauri e depois na media query `prefers-color-scheme`. As cores são tokens `--qsd-*`.
+- **Linhas de transferência:** direção, um selo do meio em uso (Bluetooth LE, BLE L2CAP, Wi-Fi LAN, Wi-Fi Direct, hotspot), um único toast por transferência mais um aviso na linha quando se recorre a um meio mais lento, velocidade em tempo real e velocidade média (AVG) ao concluir. **OPEN FILE** / **OPEN FOLDER** aparecem apenas nas recepções (1 arquivo: ambos; vários arquivos: só a pasta).
+- **Receptor mais confiável (core):** as tarefas de anúncio mDNS e BLE reiniciam sozinhas com backoff, então o PC não some mais dos dispositivos próximos após um erro; após um erro ou cancelamento na recepção, os arquivos parciais são apagados e os concluídos permanecem.
 
 ### Bridge Rust em processo não invasiva
 
@@ -121,14 +110,14 @@ A GUI executa o `rqs_lib` em processo. A fronteira é exatamente dois arquivos n
 - `app/main/src-tauri/src/bridge.rs` — assina os canais `broadcast`/`watch` do núcleo (`message_sender`, `dch_sender`, `visibility_sender`, `ble_receiver`) e reemite eventos Tauri com throttling/deduplicação. Eventos de progresso têm throttling (emite em mudança de estado, ou com delta ≥256 KiB, ou ≥500 ms; estados terminais sempre emitidos). Estouros `Lagged` do broadcast são ignorados com log de debug, nunca com falha — mesma política do CLI.
 - `app/main/src/types/qsd.ts` — espelho TypeScript estrito de `dto.rs` (nomes de eventos, `VisibilityDto`, `TransferStateDto` com todos os 18 estados centrais, `PayloadKindDto`, `TransferDto`, `EndpointDto`, `SendPayloadDto`, `ConsentDto`, `SnapshotDto`, códigos de erro). Inclui os auxiliares `humanSize` / `describeTransfer` (port do `describe()` do CLI), `baseName` e `validateSendFiles`, além dos conjuntos `TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES`.
 
-Comandos Tauri expostos (`src-tauri/src/cmds/`, ligados em `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_get_hostname` (mais os shims legados `get_hostname` / `change_download_path`). Eventos do backend → frontend: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`.
+Comandos Tauri expostos (`src-tauri/src/cmds/`, ligados em `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_scan_ble`, `qsd_send_ble`, `qsd_cancel_send`, `qsd_open_path`, `qsd_system_theme`, `qsd_get_hostname` (mais os shims legados `get_hostname` / `change_download_path`). Eventos do backend → frontend: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`, `qsd://system-theme`.
 
 ### Paridade total de comportamento com o CLI
 
 - **Cartão instantâneo de verificação de PIN UKEY2** (`ConsentCard.vue`): nome do remetente, tipo de dispositivo, PIN, resumo do conteúdo e lista de arquivos aparecem assim que o núcleo atinge `WaitingForUserConsent`. Um anel de **contagem regressiva de 60 segundos** (`QSD_CONSENT_TIMEOUT_MS`, respeitando a substituição via env `QSD_CONSENT_TIMEOUT` lida em `dto.rs`) expira o cartão; a expiração dispara a mesma **recusa automática** (`ConsentDecline` no canal) que o CLI executa. Aceitar/Recusar/Cancelar mapeiam 1:1 para `TransferAction`s do núcleo via `ConsentDto::into_channel_message`.
-- **Seletor de visibilidade de 3 estados** (`StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 s, com ponto pulsante âmbar e exibição do tempo restante), `Hidden` (`Invisible`). O temporizador Temporarily→Invisible fica no `mdns.rs` do núcleo; a GUI apenas reflete o evento `qsd://visibility` e o persiste via store do Tauri. Sem reimplementação de temporizador no lado da GUI.
+- **Seletor de visibilidade de 3 estados** (`StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 s, com o tempo restante exibido como `VISIBLE FOR 0:xx`), `Hidden` (`Invisible`). O temporizador Temporarily→Invisible fica no `mdns.rs` do núcleo; a GUI apenas reflete o evento `qsd://visibility` e o persiste via store do Tauri. Sem reimplementação de temporizador no lado da GUI.
 - **Faixa passiva de alerta de presença BLE:** avistamentos do listener BLE do núcleo chegam como eventos `qsd://ble-presence` com throttling (120 s). Quando oculta (`Invisible`), a bridge ainda dispara uma notificação de sistema sugerindo uma janela temporária de visibilidade; o frontend mostra um toast informativo ("Há um celular por perto compartilhando — verifique a visibilidade"). Respeita a semântica central de `QSD_BLE_SCAN` / `QSD_NO_BLE_SCAN`.
-- **Tratamento de transferências de texto/URL embutidas sem gravações forçadas em disco** (`TransferCard.vue`): conteúdos `Text`, `Url` e `WiFi` são renderizados embutidos com pré-visualização mais cópia para a área de transferência (plugin clipboard-manager do Tauri); nenhum arquivo é gravado no disco para exibi-los. Conteúdos de arquivo mostram contagem de arquivos RX, nomes e progresso preciso em bytes (`ack_bytes` / `total_bytes`).
+- **Tratamento de transferências de texto/URL embutidas sem gravações forçadas em disco** (`TransferCard.vue`): conteúdos `Text`, `Url` e `WiFi` aparecem na linha (`TEXT`, `LINK`, `WI-FI · SSID`) com COPY / COPY LINK (plugin clipboard-manager do Tauri) e OPEN para links; nenhum arquivo é gravado no disco para exibi-los. Conteúdos de arquivo mostram contagem de arquivos RX, nomes e progresso preciso em bytes (`ack_bytes` / `total_bytes`).
 - **Envio de arquivos via LAN/mDNS de saída com validação de arquivo regular** (`SendPane.vue` + `qsd_send_lan`): selecione arquivos via diálogo ou arrastar-e-soltar, escolha um endpoint mDNS descoberto (`EndpointDto`, `addr = ip:port`) e envie pelo canal `sender_file` do núcleo como `SendInfo { ob: Files }`. A validação é igual à do CLI: seleções vazias e diretórios são rejeitados com erros `VALIDATION` (`{f}: not a regular file (folders aren't supported)`); o frontend falha rápido nos casos óbvios antes de chamar o backend.
 
 ### Executando a GUI a partir do código-fonte
@@ -138,6 +127,7 @@ cd app/main
 pnpm install
 pnpm tauri dev     # live GUI against local core_lib (path dep: ../../core_lib)
 pnpm ts-check       # vue-tsc --noEmit contract check
+pnpm lint           # eslint
 pnpm test           # vitest suite (tests/)
 pnpm build          # production Tauri bundle
 ```

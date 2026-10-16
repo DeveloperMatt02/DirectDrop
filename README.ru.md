@@ -30,7 +30,6 @@
   <br /><br />
   <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
   <a href="#быстрая-установка-терминал"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
-  <a href="#скриншоты"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
 </div>
@@ -69,22 +68,9 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 Или выберите файл вручную на странице [последнего релиза](https://github.com/DeveloperMatt02/DirectDrop/releases/latest).
 
-## 🖥️ Скриншоты
-
-Главное окно (консоль в режиме работы: заголовок состояния, живая схема ноутбук ⇄ телефон, панель отправки, доска устройств, очередь передач):
-
 ## GUI и безголовый демон: выберите что-то одно
 
 Пакеты GUI (`.deb` / `.rpm` / `.AppImage`) содержат встроенный приёмник; пакет демона `quickshare-direct` — тот же приёмник, но безголовый. Одновременный запуск обоих анонсирует ноутбук дважды под одним именем устройства и заставляет их бороться за пользовательские Wi-Fi-помощники (`quickshare-ap@USER`, `quickshare-join@USER`), поэтому `get-directdrop.sh` отключает демон (`systemctl --user disable --now quickshare-direct`) при каждой установке пакета GUI. GUI из `.deb`/`.rpm` также добавляет DirectDrop в меню приложений (ищите "DirectDrop"); `.AppImage` — нет, пока он не интегрирован (Gear Lever, appimaged или вручную созданный файл `.desktop`). Чтобы вернуться к безголовому режиму: закройте GUI и выполните `systemctl --user enable --now quickshare-direct`.
-
-![DirectDrop main window](docs/screenshots/gui-main.svg)
-
-Входящая передача — карточка проверки UKEY2 PIN с 60-секундным обратным отсчётом и автоматическим отклонением:
-
-![DirectDrop consent card](docs/screenshots/gui-consent.svg)
-
-> [!NOTE]
-> Это схематичные заглушки в чертёжном стиле приложения. Замените `docs/screenshots/gui-main.svg` и `docs/screenshots/gui-consent.svg` настоящими снимками (`pnpm tauri dev`, сделайте скриншот окна, сохраните как `.png` рядом с ними и обновите ссылки выше).
 
 Краткое руководство апстрима по-прежнему применимо:
 
@@ -110,8 +96,11 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 ### Стек и внешний вид
 
-- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** Точка входа фронтенда — `app/main/src/App.vue`; состояние живёт в Pinia-сторах (`src/stores/session.ts`, `devices.ts`, `transfers.ts`).
-- **Техническая чертёжная эстетика:** тёмная консоль рабочего режима, табличные моноширинные метрики, живая диаграмма сетевого потока между ноутбуком и телефоном (`FlowDiagram.vue` / `FlowHero.vue`), волосяные линии в 1px, никакого маркетингового шума. Компоновка: `StatusHeader` → `FlowDiagram` → `SendPane` + `DeviceBoard` → `TransferQueue`, с тонкой нижней строкой сведений о приёмнике (путь загрузки, порт).
+- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** Точка входа фронтенда — `app/main/src/App.vue`; состояние живёт в Pinia-сторах (`src/stores/session.ts`, `devices.ts`, `transfers.ts`, `transferGroups.ts`).
+- **Раскладка с боковой панелью и лентой активности:** левая боковая панель (`StatusHeader.vue`) содержит радар (`FlowHero.vue`, волны только пока ПК виден), имя ПК, переключатель **Visible / Temporarily / Hidden**, папку загрузок и порт. Основная область — **Activity**: сверху карточка запроса на согласие, затем компактная панель отправки (`SendPane.vue` + `DeviceBoard.vue`) и список передач (`TransferQueue.vue`), сгруппированный в **NOW / TODAY / EARLIER**, от новых к старым. Строки интерфейса — английские, заглавными буквами.
+- **Светлая и тёмная тема автоматически:** следует настройке рабочего стола. В Linux читает `org.freedesktop.appearance color-scheme` из портала настроек (`ashpd`, команда `qsd_system_theme`, событие `qsd://system-theme`), с запасным вариантом через `theme()` Tauri, а затем через медиазапрос `prefers-color-scheme`. Цвета заданы токенами `--qsd-*`.
+- **Строки передач:** направление, бейдж используемого канала (Bluetooth LE, BLE L2CAP, Wi-Fi LAN, Wi-Fi Direct, hotspot), один тост на передачу плюс предупреждение в строке при переходе на более медленный канал, скорость в реальном времени и средняя скорость (AVG) после завершения. **OPEN FILE** / **OPEN FOLDER** показываются только для приёма (1 файл: обе кнопки; несколько файлов: только папка).
+- **Более надёжный приёмник (core):** задачи анонса mDNS и BLE сами перезапускаются с backoff, поэтому ПК больше не исчезает из списка ближайших устройств после ошибки; после ошибки или отмены при приёме неполные файлы удаляются, а завершённые остаются.
 
 ### Неинвазивный внутрипроцессный Rust-мост
 
@@ -121,14 +110,14 @@ GUI запускает `rqs_lib` внутри процесса. Граница �
 - `app/main/src-tauri/src/bridge.rs` — подписывается на основные каналы `broadcast`/`watch` (`message_sender`, `dch_sender`, `visibility_sender`, `ble_receiver`) и повторно излучает троттлированные/дедуплицированные события Tauri. События прогресса троттлируются (излучение при смене состояния, либо при дельте ≥256 КиБ, либо ≥500 мс; терминальные состояния излучаются всегда). Переполнения `Lagged` в broadcast пропускаются с отладочным логом, никогда не приводят к падению — та же политика, что и в CLI.
 - `app/main/src/types/qsd.ts` — строгое TypeScript-зеркало `dto.rs` (имена событий, `VisibilityDto`, `TransferStateDto` со всеми 18 основными состояниями, `PayloadKindDto`, `TransferDto`, `EndpointDto`, `SendPayloadDto`, `ConsentDto`, `SnapshotDto`, коды ошибок). Включает помощники `humanSize` / `describeTransfer` (порт CLI-функции `describe()`), `baseName` и `validateSendFiles`, плюс наборы `TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES`.
 
-Команды Tauri (`src-tauri/src/cmds/`, связаны в `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_get_hostname` (плюс старые прокладки `get_hostname` / `change_download_path`). События бэкенд → фронтенд: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`.
+Команды Tauri (`src-tauri/src/cmds/`, связаны в `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_scan_ble`, `qsd_send_ble`, `qsd_cancel_send`, `qsd_open_path`, `qsd_system_theme`, `qsd_get_hostname` (плюс старые прокладки `get_hostname` / `change_download_path`). События бэкенд → фронтенд: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`, `qsd://system-theme`.
 
 ### Полное соответствие CLI по поведению
 
 - **Мгновенная карточка проверки UKEY2 PIN** (`ConsentCard.vue`): имя отправителя, тип устройства, PIN, сводка полезной нагрузки и список файлов появляются, как только ядро достигает `WaitingForUserConsent`. **60-секундное кольцо обратного отсчёта** (`QSD_CONSENT_TIMEOUT_MS`, с учётом переопределения через env `QSD_CONSENT_TIMEOUT`, читаемого в `dto.rs`) завершает срок действия карточки; истечение срока запускает то же **автоотклонение** (`ConsentDecline` в канале), что выполняет CLI. Принять/Отклонить/Отмена отображаются 1:1 на основные `TransferAction` через `ConsentDto::into_channel_message`.
-- **3-позиционный селектор видимости** (`StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 с, с янтарной пульсирующей точкой и отображением оставшегося времени), `Hidden` (`Invisible`). Таймер перехода Temporarily→Invisible живёт в основном `mdns.rs`; GUI только отражает событие `qsd://visibility` и сохраняет его через Tauri store. Без повторной реализации таймера на стороне GUI.
+- **3-позиционный селектор видимости** (`StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 с, с оставшимся временем в виде `VISIBLE FOR 0:xx`), `Hidden` (`Invisible`). Таймер перехода Temporarily→Invisible живёт в основном `mdns.rs`; GUI только отражает событие `qsd://visibility` и сохраняет его через Tauri store. Без повторной реализации таймера на стороне GUI.
 - **Пассивный баннер присутствия по BLE:** обнаружения слушателя BLE ядра приходят как троттлированные (120 с) события `qsd://ble-presence`. Когда скрыто (`Invisible`), мост дополнительно посылает системное уведомление с предложением временного окна видимости; фронтенд показывает информационный тост («Рядом телефон делится — проверьте видимость»). Учитывает основную семантику `QSD_BLE_SCAN` / `QSD_NO_BLE_SCAN`.
-- **Встроенная обработка передач текста/URL без принудительной записи на диск** (`TransferCard.vue`): полезные нагрузки `Text`, `Url` и `WiFi` отображаются встроенно с предпросмотром и копированием в буфер обмена (плагин Tauri clipboard-manager); никакой файл на диск для их отображения не записывается. Файловые полезные нагрузки показывают число RX-файлов, имена и побайтово точный прогресс (`ack_bytes` / `total_bytes`).
+- **Встроенная обработка передач текста/URL без принудительной записи на диск** (`TransferCard.vue`): полезные нагрузки `Text`, `Url` и `WiFi` показываются в строке (`TEXT`, `LINK`, `WI-FI · SSID`) с кнопками COPY / COPY LINK (плагин Tauri clipboard-manager) и OPEN для ссылок; никакой файл на диск для их отображения не записывается. Файловые полезные нагрузки показывают число RX-файлов, имена и побайтово точный прогресс (`ack_bytes` / `total_bytes`).
 - **Исходящая отправка файлов по LAN/mDNS с проверкой обычных файлов** (`SendPane.vue` + `qsd_send_lan`): подготовьте файлы через диалог или drag-and-drop, выберите обнаруженную mDNS-конечную точку (`EndpointDto`, `addr = ip:port`) и отправьте через основной канал `sender_file` как `SendInfo { ob: Files }`. Проверка соответствует CLI: пустые выборки и каталоги отклоняются с ошибками `VALIDATION` (`{f}: not a regular file (folders aren't supported)`); фронтенд быстро отказывает в очевидных случаях ещё до вызова бэкенда.
 
 ### Запуск GUI из исходников
@@ -138,6 +127,7 @@ cd app/main
 pnpm install
 pnpm tauri dev     # live GUI against local core_lib (path dep: ../../core_lib)
 pnpm ts-check       # vue-tsc --noEmit contract check
+pnpm lint           # eslint
 pnpm test           # vitest suite (tests/)
 pnpm build          # production Tauri bundle
 ```

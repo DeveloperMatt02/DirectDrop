@@ -1,9 +1,13 @@
 # GUI_ARCHITECTURE.md — quickshare-direct
 
+> **Nota:** questo documento è un **piano storico** scritto prima della GUI attuale e può non riflettere il codice. La fonte di verità è il codice (`app/main/`) e il `README.md`. Dove diverge, vale il codice.
+
 > Progetto GUI per `quickshare-direct` **senza modificare `core_lib/`**.
 > Base fattuale: `REPO_SUMMARY.md` + verifica diretta di `core_lib/src/{lib,channel,manager,hdl/*,bin/quickshare-direct}.rs`,
-> `app/main/src-tauri/src/{main,cmds/*,store}.rs`, `app/main/src/{components/HomePage.vue,vue_lib/*}`.
+> `app/main/src-tauri/src/{main,cmds/*,store}.rs`, `app/main/src/{components/HomePage.vue,vue_lib/*}` (stato di allora: `HomePage.vue` non esiste più).
 > Branch di lavoro: `DeveloperMatt02/plan-gui-arch` (identico a `main`, nessun commit GUI).
+
+> **Aggiornamento (GUI attuale, dopo `feat/ui-redesign`):** il documento descrive il progetto originale; dove diverge, vale il codice. Layout attuale: barra laterale (`StatusHeader.vue`: radar `FlowHero.vue`, nome del PC, selettore Visible / Temporarily / Hidden, cartella download e porta) + area **Activity** (`ConsentCard` in alto, `SendPane` + `DeviceBoard`, `TransferQueue` raggruppata in NOW / TODAY / EARLIER). `FlowDiagram.vue` è stato rimosso. Il tema chiaro/scuro segue il sistema (`composables/systemTheme.ts`, token `--qsd-*`). Le viste `ReceiveView`/`SendView`, `HomePage.vue` e `SettingsModal` citate sotto non esistono (più): c'è un'unica `App.vue` e `composables/SettingsDrawer.vue`.
 
 ---
 
@@ -13,7 +17,7 @@
 |---|---|---|
 | V1 | Il core espone **solo API Rust in-process** (`RQS` + canali tokio: `broadcast::Sender<ChannelMessage>`, `broadcast::Sender<EndpointInfo>` via discovery, `mpsc::Sender<SendInfo>`, `watch::Sender<Visibility>`). Nessun REST/RPC/socket/DBus. | La GUI **deve girare nello stesso processo del core**. Qualsiasi GUI fuori processo (web app separata, Electron con sidecar, TUI su altro binario) richiederebbe un bridge IPC nuovo = modifica al perimetro core. Scartate. |
 | V2 | `core_lib` dipende già da `serde` ma **nessun tipo di dominio deriva `Serialize/Deserialize`** (verificato con grep: zero match su `serde` in `core_lib/src`). | Il wire format GUI↔core **non può riusare i tipi core tal quali** via JSON. Serve un **DTO layer in `app/main/src-tauri`** (serde lì già presente) con `From` mapping. Zero modifiche a `core_lib/`. |
-| V3 | `app/main` (Tauri 2 + Vue 3) **non compila** contro il core attuale: `RQS::new` a 4 args (GUI ne passa 3, `main.rs:130`), `rqs_lib::State` e `channel::ChannelDirection` non esistono più, `ChannelMessage` è `{id, msg}` ma la GUI legge `direction/info.state/info.meta`, bindings `@martichou/core_lib` stale (ts-rs rimosso). | Non si butta `app/main`: si **riattiva** con un adapter. Il lavoro è meccanico e confinato in `app/main/src-tauri/src` + `app/main/src`. |
+| V3 | [Storico, risolto: oggi `app/main` compila ed è la GUI attuale] `app/main` (Tauri 2 + Vue 3) **non compilava** contro il core di allora: `RQS::new` a 4 args (GUI ne passa 3, `main.rs:130`), `rqs_lib::State` e `channel::ChannelDirection` non esistono più, `ChannelMessage` è `{id, msg}` ma la GUI legge `direction/info.state/info.meta`, bindings `@martichou/core_lib` stale (ts-rs rimosso). | Non si butta `app/main`: si **riattiva** con un adapter. Il lavoro è meccanico e confinato in `app/main/src-tauri/src` + `app/main/src`. |
 | V4 | Invio BLE (`hdl::send_files_ble`, `discover_receivers`, `BleReceiver`) non passa per `RQS`/`TcpServer`: è un driver autonomo con `bluer::Adapter` + `broadcast::Sender<ChannelMessage>` proprio + `CancellationToken`. | L'invio BLE in GUI è **fase 2**: nuovo comando Tauri che esegue il driver in un task dedicato. Nessuna modifica al driver. |
 | V5 | CLI headless resta il riferimento UX (consenso con PIN + timeout `QSD_CONSENT_TIMEOUT=60s`, notifiche, `ShowItems` via FileManager1, copia testo, open link). | La GUI deve replicare **almeno** quella semantica: consenso con PIN e timeout, idempotenza (il core ripete gli update di stato), dedup per `id`. |
 
@@ -27,7 +31,7 @@
 
 | Livello | Scelta | Perché (e alternative scartate) |
 |---|---|---|
-| Shell desktop | **Tauri 2** (`app/main/src-tauri`, crate `rquickshare`) | Solo modo per ospitare `rqs_lib` in-process senza bridge (V1). Plugin già dichiarati: `store, dialog, notification, shell, autostart, clipboard, single-instance, tray-icon`. Scartati: Electron (bundle ~150 MB, servirebbe comunque sidecar Rust), .NET/GTK nativo (rewrite UI, perdita Vite/Tailwind), web server embedded (nuova superficie di rete + auth da progettare, modifica al perimetro). |
+| Shell desktop | **Tauri 2** (`app/main/src-tauri`, crate `directdrop` (all'epoca `rquickshare`)) | Solo modo per ospitare `rqs_lib` in-process senza bridge (V1). Plugin già dichiarati: `store, dialog, notification, shell, autostart, clipboard, single-instance, tray-icon`. Scartati: Electron (bundle ~150 MB, servirebbe comunque sidecar Rust), .NET/GTK nativo (rewrite UI, perdita Vite/Tailwind), web server embedded (nuova superficie di rete + auth da progettare, modifica al perimetro). |
 | Frontend | **Vue 3.5 + Pinia + Tailwind** (già in `app/main/package.json`) | La logica di presentazione esiste già (`HomePage.vue` 379 righe, `SideMenu/ContentStatus/SettingsModal/ItemSide/Heading`). Si refactorizza, non si riscrive. Scartati: React/Svelte (rewrite immotivato), TUI ratatui (perde drag&drop file, notifiche, tray — core UX del prodotto). |
 | Tipi condivisi | **DTO hand-written versionati**, non ts-rs | ts-rs è stato rimosso dalle dipendenze e i `core_lib/bindings/*.ts` sono stale. Reintrodurre derive macro nel core violerebbe il vincolo. I DTO vivono in `app/main/src-tauri/src/dto.rs` (Rust/serde) + `app/main/src/types/qsd.ts` (TS), con `DTO_VERSION` e test di snapshot (vedi §5). `tauri-specta` valutabile in seguito, non ora (aggiungerebbe codegen al build). |
 | Package manager | **pnpm 9.7** (già pinnato) | La dipendenza `link:../../core_lib` va **rimossa** (era solo per i bindings stale). |
@@ -56,11 +60,13 @@ app/main/src/
     transfers.ts          # NEW: Pinia store trasferimenti (inbound+outbound)
     devices.ts            # NEW: endpoint mDNS + ricevitori BLE
     session.ts            # NEW: visibility, device_name, download_path, discoveryRunning
+    transferGroups.ts     # NEW: funzioni pure per l'elenco Activity (NOW / TODAY / EARLIER, velocità media AVG)
     toasts.ts             # KEEP: esistente useToastStore
-  views/ ReceiveView.vue  # NEW (refactor di HomePage: sezione ricezione)
-  views/ SendView.vue     # NEW (refactor di HomePage: sezione invio)
-  components/ TransferCard.vue, ConsentCard.vue, DeviceRow.vue, ProgressBar.vue  # NEW
-  composables/            # KEEP: Heading, SideMenu, ContentStatus, ItemSide, SettingsModal
+  views/ ReceiveView.vue  # NEW (refactor di HomePage: sezione ricezione) — mai creato, vedi nota in testa
+  views/ SendView.vue     # NEW (refactor di HomePage: sezione invio) — mai creato, vedi nota in testa
+  components/ StatusHeader.vue (barra laterale), FlowHero.vue (radar), SendPane.vue, DeviceBoard.vue, DeviceRow.vue,
+             TransferQueue.vue (Activity), TransferCard.vue, ConsentCard.vue, TransportBadge.vue, ProgressBar.vue  # NEW
+  composables/            # SettingsDrawer.vue, systemTheme.ts (tema di sistema)
   vue_lib/                # MOD: utils.ts riscritto sui nuovi invoke/event; types.ts deprecato
 ```
 
@@ -172,6 +178,8 @@ Mapping note (da implementare in `dto.rs`, mai nel core):
 | `qsd_consent` | `ConsentDto` | `void` | `message_sender.send(ChannelMessage{id, msg: Lib{action}})` | Sostituisce `send_to_rs`. Accept/Decline solo su inbound in `WaitingForUserConsent`; `TransferCancel` su qualsiasi transfer attivo. Dopo l'invio il backend non attende ack (fire-and-forget come la CLI). |
 | `qsd_send_lan` | `SendPayloadDto` | `void` | `sender_file.send(SendInfo{id,name,addr,ob:Files})` | Sostituisce `send_payload`. `addr` = `ip:port` da `EndpointDto`. Solo file regolari (cartelle rifiutate con `VALIDATION`, come la CLI). |
 | `qsd_get_hostname` | — | `string` | `sys_metrics::host::get_hostname()` | KEEP (`get_hostname`). |
+| `qsd_open_path` | `{ name: string \| null, reveal: boolean }` | `void` | Nessuno (solo FS/desktop): risolve `name` nella cartella download (rifiuta percorsi assoluti o che escono dalla cartella) e lo apre o lo mostra nel file manager | Usato da OPEN FILE / OPEN FOLDER (`TransferCard.vue`), solo per le ricezioni. |
+| `qsd_system_theme` | — | `"dark" \| "light" \| null` | Nessuno: legge `org.freedesktop.appearance color-scheme` dal portale (`ashpd`) | `null` = nessuna preferenza; la GUI ripiega su `theme()` di Tauri e sulla media query. |
 | `qsd_ble_devices` (fase 2) | `{ timeout_secs: number }` (default 8, max 30) | `BleReceiverDto[]` | `hdl::discover_receivers(adapter, None, …)` one-shot | Non passa per `RQS`; apre `bluer::Adapter` on-demand. Errore `Bluetooth off` mappato in `GuiError{code:IO}`. |
 | `qsd_ble_send` (fase 2) | `{ send_id: string; address: string; files: string[] }` | `void` (ritorna subito) | `tokio::spawn(send_files_ble(adapter, receiver, files, send_id, message_sender.clone(), ctk))` con `ctk` registrato per `send_id` | Progress via `qsd://transfer` con `kind: Outbound`. |
 | `qsd_ble_cancel` (fase 2) | `{ send_id: string }` | `void` | `ctk.cancel()` per quel `send_id` | Il driver ritorna `Cancelled`; il core emette lo stato terminale. |
@@ -199,6 +207,7 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 | `qsd://endpoints` | `EndpointDto` | bridge su `dch_sender.subscribe()` | `devices.ts`; `present:false` rimuove per `id` |
 | `qsd://visibility` | `{ visibility: VisibilityDto }` | bridge su `visibility_sender` watch + emit dopo `Temporarily`→`Invisible` (60 s, logica già nel core `mdns.rs:110`) | `session.ts`; la GUI non implementa mai il timer da sé |
 | `qsd://ble-presence` | `{ at: number }` | bridge su `ble_receiver` (throttle 120 s) | toast "un telefono sta condividendo ma sei Invisible" (parità con `send_temporarily_notification`) |
+| `qsd://system-theme` | `{ theme: "dark" \| "light" \| null }` | `cmds/system_theme.rs` (osserva il portale) | `composables/systemTheme.ts` aggiorna il tema |
 
 ### 3.3 Esempi wire (JSON effettivo)
 
@@ -230,7 +239,8 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 { endpoints: Map<string,EndpointDto>; ble_receivers: Map<string,BleReceiverDto>;
   actions: { startDiscovery(), stopDiscovery(), refreshBle(timeout) } }
 // stores/transfers.ts
-{ items: Map<string, TransferView>;   // TransferView = TransferDto + ui: {consent_deadline, last_emit}
+{ items: Map<string, TransferView>;   // TransferView = TransferDto + ui: {consent_deadline, expired}
+  timing: Map<string, {startedAt, endedAt|null}>;  // timestamp lato client (non nel DTO; in `timing`, non in `ui`)
   actions: { upsert(dto), consent(id,action), cancel(id), clear(id), sendLan(endpointId) } }
 ```
 
@@ -242,13 +252,15 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 |---|---|---|
 | `WaitingForUserConsent` | `ConsentCard` (nome, descrizione file/testo/url/wifi come `describe()` CLI, **PIN grande**, countdown) | Accept / Decline |
 | `ReceivingFiles` / `SendingFiles` / `SentIntroduction` | `TransferCard` attiva + `ProgressBar` (`ack_bytes/total_bytes`, % e rate) | Cancel |
-| `Finished` | Card completata: file→"Show in folder" (via `shell.open` + `FileManager1.ShowItems` best-effort), testo→Copy, url→Open | Open / Copy / Clear |
+| `Finished` | Card completata: file ricevuti→OPEN FILE (solo 1 file) / OPEN FOLDER (`qsd_open_path`; con più file solo la cartella), testo→Copy, url→Open; velocità media AVG; nessun OPEN per gli invii | Open / Copy / Clear |
 | `Rejected` / `Cancelled` / `Disconnected` | Card errore con messaggio | Clear |
 | Tutti gli altri (`Initial…ReceivedPairedKeyResult`) | Riga compatta "Connessione…" (no azioni) — sono transienti di handshake | — |
 
 Filtro display esistente (`stateToDisplay` in `vue_lib/types.ts`) riusato come default, esteso con `SentUkey*` nascosti.
 
 ### 4.3 Viste
+
+> Struttura attuale: vedi la nota di aggiornamento in testa (barra laterale + Activity). Il seguito è il progetto originale.
 
 - **`ReceiveView`** (default): visibilità toggle (Visible/Invisible/Temporarily con hint auto-off 60 s), lista inbound (`transfers` filtrati `kind==Inbound`), empty-state "In attesa — visibile come `<device_name>`".
 - **`SendView`**: picker file (dialog + drag&drop esistente `onDragDropEvent`), lista `devices.endpoints` (mDNS, click→`sendLan`), sezione BLE fase 2 (scan→`ble_receivers`, click→`ble_send`), lista outbound con progress.
@@ -268,13 +280,13 @@ Filtro display esistente (`stateToDisplay` in `vue_lib/types.ts`) riusato come d
 
 ## 5. Fasi, test, rischi
 
-**F0 — Compila (1–2 gg):** `main.rs` fix `RQS::new(v,port,path,Some(device_name))`, `dto.rs` + `qsd.ts` + `bridge.rs`, 8 comandi §3.1 (senza `ble_*`), rimozione `link:../../core_lib`, `HomePage.vue` adattata ai nuovi nomi (logica invariata). Criterio: `cargo check -p rquickshare` + `pnpm dev` verdi.
+**F0 — Compila (1–2 gg):** `main.rs` fix `RQS::new(v,port,path,Some(device_name))`, `dto.rs` + `qsd.ts` + `bridge.rs`, 8 comandi §3.1 (senza `ble_*`), rimozione `link:../../core_lib`, `HomePage.vue` adattata ai nuovi nomi (logica invariata). Criterio: `cargo check -p directdrop` + `pnpm dev` verdi.
 **F1 — Ricezione (parità CLI):** store/view §4, consenso con countdown, notifiche, test Vitest su upsert/dedup/timeout + `cargo test` snapshot DTO.
 **F2 — Invio LAN:** `qsd_send_lan` + `SendView` mDNS (parità `app/main` originale).
 **F3 — Invio BLE (chiude il gap col fork):** `ble_send.rs` + task registry `HashMap<send_id, CancellationToken>` in `AppState`; `SendView` sezione BLE. Nessuna modifica a `send.rs/join.rs/hotspot.rs`.
 **F4 — Polish/packaging:** icone/tray, update-check esistente, `.desktop` opzionale GUI, docs utente. Il daemon systemd resta il default installato; la GUI è opt-in (non si toccano `Makefile`/`packaging/` in F0–F3).
 
-**Test:** `cargo test -p rquickshare` (mapping DTO↔fixture JSON, `DTO_VERSION` sync con `qsd.ts`); `pnpm test` (store: upsert idempotente, Lagged-skip, countdown auto-decline, present:false removal); manuale con `tools/dev/qs-*.sh` come da REPO_SUMMARY §9 (service user stoppato, porte 46257/46258 libere).
+**Test:** `cargo test -p directdrop` (mapping DTO↔fixture JSON, `DTO_VERSION` sync con `qsd.ts`); `pnpm test` (store: upsert idempotente, Lagged-skip, countdown auto-decline, present:false removal); manuale con `tools/dev/qs-*.sh` come da REPO_SUMMARY §9 (service user stoppato, porte 46257/46258 libere).
 
 **Rischi:** (1) `broadcast` lag sotto transfer veloci (~35 MB/s) → mitigato da throttle+skip; (2) `device_name` richiede restart annunci → hint UI, mai restart automatico durante transfer; (3) BLE scan richiede adapter BlueZ + permessi → errori mappati in toast, mai crash; (4) divergenza futura core → i DTO isolano la GUI: se il core cambia, si aggiorna solo `dto.rs`+snapshot.
 
