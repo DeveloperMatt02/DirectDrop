@@ -95,7 +95,7 @@ Upstream quick-start still applies:
 | Phone on the same Wi-Fi → LAN | works |
 | Bluetooth Classic first contact | experimental (`QSD_BT_CLASSIC=1`) |
 | Send to Android → phone's Wi-Fi Direct (300 MB, ~36 MB/s) | works (`quickshare-direct send`, file manager, GUI send pane) |
-| Send over Bluetooth only (no shared Wi-Fi) to a OnePlus Nord4 | not working yet: the phone asks to pair, then doesn't answer; use the same Wi-Fi (LAN) |
+| Send over Bluetooth only (no shared Wi-Fi) to a OnePlus Nord4 (Android 16) | works (GUI send pane, BLE L2CAP, no pairing prompt) |
 | Packages: Debian/Ubuntu, Fedora, Arch, generic (x86_64, aarch64) | one-line install, see below |
 
 ---

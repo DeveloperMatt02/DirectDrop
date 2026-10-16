@@ -286,6 +286,34 @@ a marker `/run/quickshare-reconnect-<iface>` lets the units' ExecStopPost
 (packaging/linux/quickshare-reconnect) reconnect even if the helper dies. The guard is disowned
 and its pipeline's stderr silenced (no "Terminated" in the logs).
 
+## 2026-10-16: sending over BLE to a OnePlus Nord4
+
+The Nord4 (Android 16, Google Play services 26.39.33) failed every Bluetooth send while a Pixel
+worked: pairing prompts, "no answer to the L2CAP data connection request", "no weave
+characteristics", LE connections timing out. Phone logs (adb logcat) explained it:
+
+- **FastInit churn.** While the GUI's LAN discovery runs, `BleAdvertiser` emits the 0xFE2C
+  FastInit beacon. A phone on its Receive screen restarts its whole Quick Share advertising
+  (new non-resolvable address, new private GATT/L2CAP session) on every FastInit CLOSE/LOST
+  change: 14 restarts in 3 minutes, so a link to the address just found died within seconds.
+  `FastInitPause` (blea.rs) now keeps the beacon off during `discover_receivers` and
+  `send_files_ble`, and for 2 minutes after. With it the phone stayed on one address and
+  answered L2CAP (`data connection ready`). `QSD_NO_FASTINIT=1` disables the beacon entirely.
+- **Pairing came from the PC, not from the phone.** The phone's L2CAP server on PSM 128 is
+  insecure (`isSecured false`). bluetoothd's automatic GATT discovery on every new LE link reads
+  OnePlus/HeyTap attributes that need encryption, so BlueZ started SMP mid-transfer; the pairing
+  dialog covered Quick Share's Accept prompt and declining it dropped the link. `l2cap_connect`
+  now holds an own ATT client socket on the link first (same kernel rule as att.rs), so bluetoothd
+  stays off it: no pairing prompt (`QSD_L2CAP_ATT_GUARD=0` turns this off).
+- The phone advertises with non-resolvable private addresses, so a bond never matches a later
+  connection; scans now keep, per endpoint, the address that appeared last rather than the
+  strongest (BlueZ caches old addresses with RSSI).
+- GUI: the link setup is capped at 40 s (bluetoothd's Device.Connect at 15 s), a failed send shows
+  a toast, and BLE scan results older than 20 s turn SEND into SCAN AGAIN.
+
+Result: laptop → Nord4 over BLE L2CAP with no shared Wi-Fi, no pairing prompt. Not re-tested on a
+Pixel yet.
+
 ## Plan
 
 1. Put the real adapter address in the advertisement; make the BLE weave server handle

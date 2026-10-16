@@ -84,7 +84,7 @@ GUI 安装包（`.deb` / `.rpm` / `.AppImage`）内置了自己的接收端；`q
 | 手机在同一 Wi-Fi 下 → LAN | 可用 |
 | Bluetooth Classic 首次连接 | 实验性 (`QSD_BT_CLASSIC=1`) |
 | 发送到 Android → 手机的 Wi-Fi Direct（300 MB，约 36 MB/s） | 可用 (`quickshare-direct send`、file manager、GUI send pane) |
-| 仅通过蓝牙发送到 OnePlus Nord4（无共享 Wi-Fi） | 暂不可用：手机要求配对后不再响应；请使用同一 Wi-Fi（LAN） |
+| 仅通过蓝牙发送到 OnePlus Nord4（Android 16，无共享 Wi-Fi） | 可用（GUI 发送面板、BLE L2CAP、无配对请求） |
 | 软件包：Debian/Ubuntu、Fedora、Arch、通用版（x86_64、aarch64） | 一键安装，见下文 |
 
 ---

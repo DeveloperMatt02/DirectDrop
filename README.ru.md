@@ -86,7 +86,7 @@ sudo apt-get install -y /tmp/directdrop.deb
 | Телефон в том же Wi-Fi → LAN | работает |
 | Первый контакт по Bluetooth Classic | экспериментально (`QSD_BT_CLASSIC=1`) |
 | Отправка на Android → Wi-Fi Direct телефона (300 МБ, ~36 МБ/с) | работает (`quickshare-direct send`, файловый менеджер, панель отправки GUI) |
-| Отправка только по Bluetooth (без общей Wi-Fi) на OnePlus Nord4 | пока не работает: телефон запрашивает сопряжение и затем не отвечает; используйте одну сеть Wi-Fi (LAN) |
+| Отправка только по Bluetooth (без общей Wi-Fi) на OnePlus Nord4 (Android 16) | работает (панель отправки GUI, BLE L2CAP, без запроса сопряжения) |
 | Пакеты: Debian/Ubuntu, Fedora, Arch, универсальный (x86_64, aarch64) | установка одной строкой, см. ниже |
 
 ---
