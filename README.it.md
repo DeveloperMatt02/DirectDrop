@@ -83,6 +83,7 @@ La guida rapida upstream resta valida:
 | Telefono sulla stessa rete Wi-Fi → LAN | funzionante |
 | Primo contatto via Bluetooth Classic | sperimentale (`QSD_BT_CLASSIC=1`) |
 | Invio ad Android → Wi-Fi Direct del telefono (300 MB, ~36 MB/s) | funzionante (`quickshare-direct send`, file manager, pannello di invio della GUI) |
+| Invio solo via Bluetooth (senza Wi-Fi in comune) a un OnePlus Nord4 | non ancora funzionante: il telefono chiede l'associazione e poi non risponde; usa la stessa rete Wi-Fi (LAN) |
 | Pacchetti: Debian/Ubuntu, Fedora, Arch, generico (x86_64, aarch64) | installazione con una riga, vedi sotto |
 
 ---

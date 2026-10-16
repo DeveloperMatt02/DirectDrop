@@ -82,6 +82,7 @@ GUI バンドル（`.deb` / `.rpm` / `.AppImage`）には受信機能が内蔵�
 | スマートフォンが同じ Wi-Fi 上 → LAN | 動作します |
 | Bluetooth Classic によるファーストコンタクト | 実験的です（`QSD_BT_CLASSIC=1`） |
 | Android へ送信 → スマートフォンの Wi-Fi Direct（300 MB、~36 MB/s） | 動作します（`quickshare-direct send`、ファイルマネージャー、GUI 送信ペイン） |
+| Bluetooth のみで OnePlus Nord4 へ送信（共有 Wi-Fi なし） | まだ動作しません：スマートフォンがペアリングを求めた後に応答しません。同じ Wi-Fi（LAN）を使ってください |
 | パッケージ：Debian / Ubuntu、Fedora、Arch、汎用（x86_64、aarch64） | ワンラインインストールで、以下を参照してください |
 
 ---

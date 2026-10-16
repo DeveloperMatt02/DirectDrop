@@ -95,6 +95,7 @@ Der Upstream-Schnellstart gilt weiterhin:
 | Telefon im selben WLAN → LAN | funktioniert |
 | Bluetooth-Classic-Erstkontakt | experimentell (`QSD_BT_CLASSIC=1`) |
 | Senden an Android → Wi-Fi Direct des Telefons (300 MB, ~36 MB/s) | funktioniert (`quickshare-direct send`, Dateimanager, GUI-Sendebereich) |
+| Senden nur über Bluetooth (ohne gemeinsames WLAN) an ein OnePlus Nord4 | funktioniert noch nicht: das Telefon verlangt eine Kopplung und antwortet dann nicht; dasselbe WLAN (LAN) verwenden |
 | Pakete: Debian/Ubuntu, Fedora, Arch, generisch (x86_64, aarch64) | Einzeilen-Installation, siehe unten |
 
 ---

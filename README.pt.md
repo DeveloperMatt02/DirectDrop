@@ -86,6 +86,7 @@ O guia rápido original continua válido:
 | Celular no mesmo Wi-Fi → LAN | funciona |
 | Primeiro contato via Bluetooth Classic | experimental (`QSD_BT_CLASSIC=1`) |
 | Enviar para Android → Wi-Fi Direct do celular (300 MB, ~36 MB/s) | funciona (`quickshare-direct send`, gerenciador de arquivos, painel de envio da GUI) |
+| Enviar só por Bluetooth (sem Wi-Fi em comum) para um OnePlus Nord4 | ainda não funciona: o celular pede pareamento e depois não responde; use a mesma rede Wi-Fi (LAN) |
 | Pacotes: Debian/Ubuntu, Fedora, Arch, genérico (x86_64, aarch64) | instalação em uma linha, veja abaixo |
 
 ---
