@@ -6,7 +6,7 @@ import { useSessionStore } from '../stores/session';
 import { useToastStore } from '../vue_lib/stores/useToastStore';
 import { ToastType } from '../vue_lib/types';
 import { sendToBle, sendToEndpoint } from '../vue_lib/utils';
-import { bleReceiverLabel, isTerminalState } from '../types/qsd';
+import { BLE_SEND_FAILED_MESSAGE, bleReceiverLabel, isBleScanStale, isTerminalState } from '../types/qsd';
 import { useTransfersStore } from '../stores/transfers';
 import DeviceRow from './DeviceRow.vue';
 
@@ -29,7 +29,7 @@ let timer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
 	timer = setInterval(() => {
 		now.value = Date.now();
-	}, 5000);
+	}, 1000);
 });
 onBeforeUnmount(() => {
 	if (timer) clearInterval(timer);
@@ -41,6 +41,9 @@ const bleHint = computed(() => {
 	if (ageS > 120) return null;
 	return ageS;
 });
+
+// Old scan results point at addresses the phone may have dropped: SEND turns into SCAN AGAIN.
+const bleStale = computed(() => isBleScanStale(lastScanAt.value, now.value));
 
 const lastScanLabel = computed(() => {
 	if (lastScanAt.value === null) return null;
@@ -58,7 +61,10 @@ watch(
 	(items) => {
 		if (pendingBle.value) {
 			const t = items.get(pendingBle.value);
-			if (t && isTerminalState(t.state)) pendingBle.value = null;
+			if (t && isTerminalState(t.state)) {
+				if (t.state === 'Disconnected') toasts.addToast(BLE_SEND_FAILED_MESSAGE, ToastType.Error);
+				pendingBle.value = null;
+			}
 		}
 	},
 	{ deep: true },
@@ -92,6 +98,11 @@ async function scanBle() {
 async function selectBle(receiverId: string) {
 	if (!hasStaged.value) {
 		toasts.addToast('Select files first, then pick a device', ToastType.Info);
+		return;
+	}
+	// The button may still read SEND for up to a second after the scan went stale.
+	if (isBleScanStale(lastScanAt.value, Date.now())) {
+		await scanBle();
 		return;
 	}
 	// Un solo send BLE alla volta: la connessione occupa l'adapter e i
@@ -169,6 +180,15 @@ async function selectBle(receiverId: string) {
 					<span class="block truncate font-mono text-[11px] tabular-nums text-faint" :title="r.address">{{ r.address }}</span>
 				</span>
 				<button
+					v-if="bleStale"
+					type="button" :disabled="scanning || pendingBle !== null"
+					class="qsd-action shrink-0"
+					aria-label="Scan results are old, scan again before sending"
+					@click="scanBle">
+					SCAN AGAIN
+				</button>
+				<button
+					v-else
 					type="button" :disabled="!hasStaged || scanning || pendingBle !== null"
 					class="qsd-action qsd-action-primary shrink-0"
 					:aria-label="`Send staged files to ${bleReceiverLabel(r)} over Bluetooth`"

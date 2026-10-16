@@ -220,6 +220,18 @@ export function transportNotice(t: TransportDto | null | undefined): string | nu
 	return t.reason_text ? `${head} — ${t.reason_text}` : head;
 }
 
+/** BLE scan results older than this are likely stale: a phone's random BLE address rotates. */
+export const BLE_SCAN_MAX_AGE_MS = 20_000;
+
+/** True when there is no scan yet or the last one is older than `BLE_SCAN_MAX_AGE_MS`. */
+export function isBleScanStale(lastScanAt: number | null, now: number): boolean {
+	return lastScanAt === null || now - lastScanAt > BLE_SCAN_MAX_AGE_MS;
+}
+
+/** Toast shown when a Bluetooth send ends without reaching the phone. */
+export const BLE_SEND_FAILED_MESSAGE =
+	"Bluetooth send failed. Keep the phone on Receive and scan again, or use the same Wi-Fi. Some phones (e.g. OnePlus Nord4) don't accept Bluetooth sends yet.";
+
 export function isTerminalState(state: TransferStateDto): boolean {
 	return TERMINAL_STATES.has(state);
 }

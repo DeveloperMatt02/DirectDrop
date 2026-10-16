@@ -46,8 +46,16 @@ pub async fn send_files_ble(
         }
         weave_connect(adapter, receiver.address).await.map(|s| (s, false))
     };
+    // Cap the whole link setup: some phones (a OnePlus Nord4) accept the LE link but never answer,
+    // and the steps below would otherwise wait for minutes in total.
     let (stream, over_l2cap) = tokio::select! {
         s = connect => s?,
+        _ = tokio::time::sleep(CONNECT_DEADLINE) => {
+            return Err(anyhow!(
+                "no Bluetooth link to the receiver within {}s",
+                CONNECT_DEADLINE.as_secs()
+            ));
+        }
         _ = ctk.cancelled() => return Ok(TransferState::Cancelled),
     };
     let mut or = OutboundRequest::new(
@@ -131,6 +139,10 @@ pub async fn send_files_ble(
 /// File data per frame over a BLE L2CAP channel. Each frame must fit one L2CAP SDU (the Pixel
 /// drops the link on a 64 KB chunk); 16 KB measured 46 KB/s against 38 KB/s with Nearby's 1 KB.
 const L2CAP_CHUNK_SIZE: usize = 16 * 1024;
+
+/// Longest wait for a Bluetooth link to the receiver (L2CAP, then GATT/weave). A Pixel needs ~6 s;
+/// the L2CAP attempt alone can legitimately take ~20 s when it falls back.
+const CONNECT_DEADLINE: Duration = Duration::from_secs(40);
 
 /// How long to hold the files after Accept for the receiver's upgrade offer.
 const UPGRADE_WAIT: Duration = Duration::from_secs(10);

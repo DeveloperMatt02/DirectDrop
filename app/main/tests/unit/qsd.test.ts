@@ -4,8 +4,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { useTransfersStore } from '../../src/stores/transfers';
 import { bleKey, useDevicesStore } from '../../src/stores/devices';
 import {
+	BLE_SCAN_MAX_AGE_MS,
 	HANDSHAKE_STATES,
 	bleReceiverLabel,
+	isBleScanStale,
 	describeTransfer,
 	humanSize,
 	validateSendFiles,
@@ -131,5 +133,20 @@ describe('BLE receivers (plan §3)', () => {
 		expect(isOutboundWaiting({ kind: 'Outbound', state: 'SentUkeyClientInit' })).toBe(true);
 		expect(isOutboundWaiting({ kind: 'Outbound', state: 'SendingFiles' })).toBe(false);
 		expect(isOutboundWaiting({ kind: 'Inbound', state: 'WaitingForUserConsent' })).toBe(false);
+	});
+});
+
+describe('BLE scan freshness (rotating phone addresses)', () => {
+	test('no scan yet counts as stale', () => {
+		expect(isBleScanStale(null, 1_000)).toBe(true);
+	});
+	test('fresh within the window, stale after it', () => {
+		const t0 = 1_000_000;
+		expect(isBleScanStale(t0, t0)).toBe(false);
+		expect(isBleScanStale(t0, t0 + BLE_SCAN_MAX_AGE_MS)).toBe(false);
+		expect(isBleScanStale(t0, t0 + BLE_SCAN_MAX_AGE_MS + 1)).toBe(true);
+	});
+	test('window is 20 s', () => {
+		expect(BLE_SCAN_MAX_AGE_MS).toBe(20_000);
 	});
 });

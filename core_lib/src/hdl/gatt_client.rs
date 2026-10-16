@@ -27,6 +27,8 @@ const WEAVE_PROTOCOL_VERSION: u16 = 1;
 // Smallest weave packet (fits the default ATT MTU). The weave packet size otherwise follows the
 // link's MTU; QSD_WEAVE_PACKET overrides it for experiments.
 const WEAVE_MIN_PACKET: u16 = 20;
+// Upper bound for the fallback through bluetoothd's GATT client (Device.Connect).
+const BLUEZ_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 
 const QS_SVC_HASH: [u8; 3] = [0xfc, 0x9f, 0x5e];
 // SocketControlFrame { type: INTRODUCTION, introduction { service_id_hash: fc9f5e,
@@ -261,7 +263,14 @@ async fn open_att(dev: &Device) -> Result<(WeaveWriter, PacketStream, u16), anyh
 /// bluetoothd's GATT client (fallback). Its MTU exchange comes too early for the phone's
 /// private GATT server, so only 20-byte weave packets get through.
 async fn open_bluez(dev: &Device) -> Result<(WeaveWriter, PacketStream, u16), anyhow::Error> {
-    dev.connect().await?;
+    // Without a bound, Device.Connect can hang until D-Bus gives up (~2 min seen with a Nord4).
+    match tokio::time::timeout(BLUEZ_CONNECT_TIMEOUT, dev.connect()).await {
+        Ok(r) => r?,
+        Err(_) => {
+            let _ = dev.disconnect().await;
+            return Err(anyhow!("bluetoothd connection to {} timed out", dev.address()));
+        }
+    }
     for _ in 0..100 {
         if dev.is_services_resolved().await? {
             break;
