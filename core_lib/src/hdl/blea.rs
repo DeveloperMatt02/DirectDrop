@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use bluer::UuidExt;
 use bluer::adv::Advertisement;
@@ -11,6 +13,46 @@ const SERVICE_DATA: Bytes = Bytes::from_static(&[
 ]);
 
 const INNER_NAME: &str = "BleAdvertiser";
+
+// Bluetooth scans and sends pause this advertisement: a phone on its Receive screen (seen with a
+// OnePlus Nord4) restarts its own Quick Share advertising, with a new address and a new GATT/L2CAP
+// session, each time it sees it appear or vanish, so a link to the address just found died.
+static FAST_INIT_HOLDS: AtomicUsize = AtomicUsize::new(0);
+static FAST_INIT_PAUSED_UNTIL: Mutex<Option<Instant>> = Mutex::new(None);
+/// How long the pause outlasts the last scan or send, so the address found stays valid while the
+/// user picks a phone and between attempts.
+const FAST_INIT_PAUSE_TAIL: Duration = Duration::from_secs(120);
+
+/// Keeps the 0xFE2C FastInit advertisement off while alive, and for `FAST_INIT_PAUSE_TAIL` after.
+pub struct FastInitPause(());
+
+impl FastInitPause {
+    pub fn hold() -> Self {
+        FAST_INIT_HOLDS.fetch_add(1, Ordering::SeqCst);
+        Self(())
+    }
+}
+
+impl Drop for FastInitPause {
+    fn drop(&mut self) {
+        let until = Instant::now() + FAST_INIT_PAUSE_TAIL;
+        if let Ok(mut p) = FAST_INIT_PAUSED_UNTIL.lock() {
+            if p.is_none_or(|t| t < until) {
+                *p = Some(until);
+            }
+        }
+        FAST_INIT_HOLDS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+fn fast_init_paused() -> bool {
+    FAST_INIT_HOLDS.load(Ordering::SeqCst) > 0
+        || FAST_INIT_PAUSED_UNTIL
+            .lock()
+            .ok()
+            .and_then(|p| *p)
+            .is_some_and(|t| Instant::now() < t)
+}
 
 #[derive(Debug, Clone)]
 pub struct BleAdvertiser {
@@ -36,11 +78,27 @@ impl BleAdvertiser {
         );
 
         let service_uuid = Uuid::from_u16(0xFE2C);
-        let handle = self
-            .adapter
-            .advertise(self.get_advertisement(service_uuid, SERVICE_DATA))
-            .await?;
-        ctk.cancelled().await;
+        let mut handle = None;
+        loop {
+            let paused = fast_init_paused();
+            if paused && handle.is_some() {
+                info!("{INNER_NAME}: paused during a Bluetooth scan or send");
+                handle = None;
+            } else if !paused && handle.is_none() {
+                match self
+                    .adapter
+                    .advertise(self.get_advertisement(service_uuid, SERVICE_DATA))
+                    .await
+                {
+                    Ok(h) => handle = Some(h),
+                    Err(e) => warn!("{INNER_NAME}: couldn't (re)start advertising: {e}"),
+                }
+            }
+            tokio::select! {
+                _ = ctk.cancelled() => break,
+                _ = tokio::time::sleep(Duration::from_millis(250)) => {}
+            }
+        }
         info!("{INNER_NAME}: tracker cancelled, returning");
         drop(handle);
 

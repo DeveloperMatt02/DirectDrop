@@ -109,6 +109,8 @@ pub async fn discover_receivers(
     timeout: Duration,
     settle: Duration,
 ) -> Result<Vec<BleReceiver>, anyhow::Error> {
+    // No FastInit advertisement while scanning, nor for a while after (see `FastInitPause`).
+    let _fast_init_pause = crate::hdl::FastInitPause::hold();
     let svc = Uuid::from_u16(QS_GATT_SERVICE);
     // Keep discovery running while we poll; BlueZ's cache also lists devices from earlier
     // scans (whose random addresses may be gone), so only take ones seen now (RSSI set).
@@ -128,15 +130,22 @@ pub async fn discover_receivers(
     };
     let start = tokio::time::Instant::now();
     let mut first_seen: Option<tokio::time::Instant> = None;
-    let mut found: HashMap<[u8; 4], (BleReceiver, i16)> = HashMap::new();
+    // Per endpoint, the address that showed up last wins (a phone that restarts its advertising
+    // leaves the old address in BlueZ's cache for a while); RSSI breaks ties.
+    let mut found: HashMap<[u8; 4], (BleReceiver, i16, u64)> = HashMap::new();
+    let mut order: HashMap<Address, u64> = HashMap::new();
+    let mut round: u64 = 0;
     loop {
+        round += 1;
         for addr in adapter.device_addresses().await? {
             if let Some((r, rssi)) = check(addr).await {
                 first_seen.get_or_insert_with(tokio::time::Instant::now);
+                let seen = *order.entry(addr).or_insert(round);
                 match found.get(&r.endpoint_id) {
-                    Some((_, best)) if *best >= rssi => {}
+                    Some((_, best, best_seen))
+                        if *best_seen > seen || (*best_seen == seen && *best >= rssi) => {}
                     _ => {
-                        found.insert(r.endpoint_id, (r, rssi));
+                        found.insert(r.endpoint_id, (r, rssi, seen));
                     }
                 }
             }
@@ -150,8 +159,8 @@ pub async fn discover_receivers(
         tokio::time::sleep(Duration::from_millis(300)).await;
     }
     let mut v: Vec<_> = found.into_values().collect();
-    v.sort_by_key(|(_, rssi)| -rssi);
-    Ok(v.into_iter().map(|(r, _)| r).collect())
+    v.sort_by_key(|(_, rssi, _)| -rssi);
+    Ok(v.into_iter().map(|(r, _, _)| r).collect())
 }
 
 async fn find_weave_chars(dev: &Device) -> Result<(Characteristic, Characteristic), anyhow::Error> {

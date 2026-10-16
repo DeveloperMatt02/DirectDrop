@@ -328,22 +328,28 @@ impl RQS {
         let ctk = CancellationToken::new();
         self.discovery_ctk = Some(ctk.clone());
 
+        // QSD_NO_FASTINIT=1: skip the 0xFE2C "I want to send" advertisement (diagnostics: it makes
+        // some phones restart their Quick Share advertising, and their address, every few seconds).
         #[cfg(all(feature = "experimental", target_os = "linux"))]
         {
-            let ctk_blea = ctk.clone();
-            tracker.spawn(async move {
-                let blea = match BleAdvertiser::new().await {
-                    Ok(b) => b,
-                    Err(e) => {
-                        error!("Couldn't init BleAdvertiser: {}", e);
-                        return;
-                    }
-                };
+            if std::env::var_os("QSD_NO_FASTINIT").is_some() {
+                info!("BleAdvertiser: disabled (QSD_NO_FASTINIT)");
+            } else {
+                let ctk_blea = ctk.clone();
+                tracker.spawn(async move {
+                    let blea = match BleAdvertiser::new().await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            error!("Couldn't init BleAdvertiser: {}", e);
+                            return;
+                        }
+                    };
 
-                if let Err(e) = blea.run(ctk_blea).await {
-                    error!("Couldn't start BleAdvertiser: {}", e);
-                }
-            });
+                    if let Err(e) = blea.run(ctk_blea).await {
+                        error!("Couldn't start BleAdvertiser: {}", e);
+                    }
+                });
+            }
         }
 
         let discovery = MDnsDiscovery::new(sender)?;

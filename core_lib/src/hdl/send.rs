@@ -34,6 +34,8 @@ pub async fn send_files_ble(
     sender: Sender<ChannelMessage>,
     ctk: CancellationToken,
 ) -> Result<TransferState, anyhow::Error> {
+    // No FastInit advertisement while sending (see `FastInitPause`).
+    let _fast_init_pause = crate::hdl::FastInitPause::hold();
     // Bluetooth link: the receiver's L2CAP channel when it advertises one (faster, sets up
     // sooner), else (or if that fails) its GATT/weave socket. QSD_BLE_L2CAP=0 forces weave.
     let connect = async {
@@ -46,8 +48,8 @@ pub async fn send_files_ble(
         }
         weave_connect(adapter, receiver.address).await.map(|s| (s, false))
     };
-    // Cap the whole link setup: some phones (a OnePlus Nord4) accept the LE link but never answer,
-    // and the steps below would otherwise wait for minutes in total.
+    // Cap the whole link setup: when the phone's advertising set goes away under us (its address
+    // rotated), the steps below would otherwise wait for minutes in total.
     let (stream, over_l2cap) = tokio::select! {
         s = connect => s?,
         _ = tokio::time::sleep(CONNECT_DEADLINE) => {
