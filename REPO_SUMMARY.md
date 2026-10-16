@@ -1,5 +1,9 @@
 # REPO_SUMMARY.md — quickshare-direct
 
+> **Nota:** questo documento è un **piano storico** scritto prima della GUI attuale e può non riflettere il codice. La fonte di verità è il codice (`app/main/`, `core_lib/`) e il `README.md`. Dove diverge, vale il codice.
+
+> Le sezioni sulla GUI (§5, §6.3, §8) descrivono lo stato precedente al fork DirectDrop: `app/main` oggi compila, usa `DTO_VERSION` 1 e il bridge `dto.rs`/`bridge.rs`, e può inviare anche via BLE.
+
 Analisi della struttura del repository (branch corrente: `DeveloperMatt02/recon-gui`).
 Fonti: `README.md`, `CLAUDE.md`, `BUILD.md`, `docs/DEV_NOTES.md`, manifest di dipendenza, entrypoint.
 
@@ -60,7 +64,7 @@ Non esistono API REST, RPC di rete o un server web: **tutto passa per chiamate d
 | `core_lib/package.json` | npm package **`@martichou/core_lib`**: solo tipi TypeScript per la Vue app (`dist/`, `esm/`, `bindings/`), build con `tsc`. Nessun runtime. |
 | `core_lib/bindings/*.ts` | tipi generati in passato da **ts-rs** (`State.ts`, `ChannelMessage.ts`, `Visibility.ts`, ...). *ts-rs oggi non è più nelle dipendenze: i file sono stale (vedi §7).* |
 | `app/main/package.json` | GUI frontend: Vue 3.5, Pinia, Tailwind, Vite 5, Vitest, `@tauri-apps/api` v2, plugin tauri (store, dialog, notification, shell, autostart, clipboard), dipendenza `@martichou/core_lib: link:../../core_lib`. Package manager **pnpm 9.7**. |
-| `app/main/src-tauri/Cargo.toml` | crate `rquickshare` (Tauri **2.2**, tray-icon, single-instance...), dipende da `rqs_lib = { path = "../../../core_lib", features = ["experimental"] }`. |
+| `app/main/src-tauri/Cargo.toml` | crate `directdrop` (Tauri **2.2**, tray-icon, single-instance...), dipende da `rqs_lib = { path = "../../../core_lib", features = ["experimental"] }`. |
 | `app/legacy/package.json` + `app/legacy/src-tauri/Cargo.toml` | stessa app upstream su **Tauri 1.8** + `@tauri-apps/api` 1.6 (cartella "legacy" di rQuickShare). |
 | `Makefile` | `make` → `cargo build --release --locked --bin quickshare-direct`; `make install DESTDIR= PREFIX=` installa binario, helper, unit systemd, polkit, firewalld/ufw, NM, .desktop. |
 | `flake.nix` | packaging Nix + modulo NixOS `services.quickshare-direct` + `devShells` (`nix develop`). |
@@ -113,7 +117,7 @@ Nessun `pyproject.toml`, `CMakeLists.txt`, `go.mod`: il progetto è **Rust + Typ
 
 ## 5. GUI esistente? Branch/cartelle dedicati?
 
-**Sì, esiste una GUI desktop (Tauri + Vue), ma è upstream e non è più allineata al core.**
+**Sì, esiste una GUI desktop (Tauri + Vue): `app/main/` è la GUI attuale; `app/legacy/` è upstream.**
 
 | Dove | Cosa | Stato |
 |---|---|---|
@@ -179,7 +183,7 @@ Frontend → backend: `invoke()` da `@tauri-apps/api/core` su 7 comandi registra
 | `get_hostname` | `cmds/get_hostname.rs` | `sys_metrics::host::get_hostname()` |
 
 Backend → frontend: `app.emit(...)` con eventi **`rs2js_channelmessage`** e **`rs2js_endpointinfo`**
-(assegnati in `spawn_receiver_tasks`, consumati in `HomePage.vue` con `listen(...)`).
+(assegnati in `spawn_receiver_tasks`, consumati in `HomePage.vue` con `listen(...)`; stato storico: oggi eventi `qsd://*`, vedi README).
 
 ### 6.4 Contratto di tipo condiviso
 
@@ -219,11 +223,7 @@ Frontend (`app/*/src`): solo presentazione + adapter IPC; nessuna logica di busi
 
 ## 8. Stato della GUI rispetto al core (importante per un nuovo lavoro GUI)
 
-`README.md` e `CLAUDE.md` dichiarano esplicitamente che **`app/` è il Tauri app di rQuickShare, non
-buildato, non spedito, non testato in questo fork**, e che il suo invio funziona solo su LAN
-condivisa (mDNS + TCP), senza il percorso Bluetooth/Wi-Fi Direct della CLI `send`.
-
-Verifica statica: **`app/main` non compila contro `core_lib` attuale**. Divergenze trovate:
+[Storico: i documenti di allora dichiaravano `app/` non buildato né testato e l'invio solo LAN; oggi `app/main` è la GUI attuale, compila contro `core_lib` e ha anche l'invio BLE.] Verifica statica di allora: `app/main` non compilava contro `core_lib`. Divergenze trovate:
 
 1. `RQS::new(visibility, port, download_path)` — l'attuale firma ha **4 parametri** (aggiunto
    `device_name`) → `app/main/src-tauri/src/main.rs:114`, idem `app/legacy:99`.
@@ -256,8 +256,8 @@ cd core_lib && cargo run --bin quickshare-direct        # receiver dev
 core_lib/target/release/quickshare-direct send FILE...  # invio
 make                                            # build del binario (solo quickshare-direct)
 make install DESTDIR=... PREFIX=...             # stage/install (no GUI)
-cd app/main && pnpm install && pnpm dev         # GUI Tauri 2 (ATTENZIONE: non compila, §8)
-cd app/main && pnpm test                        # vitest (solo example.test.ts)
+cd app/main && pnpm install && pnpm tauri dev   # GUI Tauri 2
+cd app/main && pnpm test                        # vitest (tests/)
 ```
 
 Il service installato va fermato prima di un dev build (`systemctl --user stop quickshare-direct`;

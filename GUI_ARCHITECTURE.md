@@ -1,11 +1,13 @@
 # GUI_ARCHITECTURE.md — quickshare-direct
 
+> **Nota:** questo documento è un **piano storico** scritto prima della GUI attuale e può non riflettere il codice. La fonte di verità è il codice (`app/main/`) e il `README.md`. Dove diverge, vale il codice.
+
 > Progetto GUI per `quickshare-direct` **senza modificare `core_lib/`**.
 > Base fattuale: `REPO_SUMMARY.md` + verifica diretta di `core_lib/src/{lib,channel,manager,hdl/*,bin/quickshare-direct}.rs`,
-> `app/main/src-tauri/src/{main,cmds/*,store}.rs`, `app/main/src/{components/HomePage.vue,vue_lib/*}`.
+> `app/main/src-tauri/src/{main,cmds/*,store}.rs`, `app/main/src/{components/HomePage.vue,vue_lib/*}` (stato di allora: `HomePage.vue` non esiste più).
 > Branch di lavoro: `DeveloperMatt02/plan-gui-arch` (identico a `main`, nessun commit GUI).
 
-> **Aggiornamento (GUI attuale, dopo `feat/ui-redesign`):** il documento descrive il progetto originale; dove diverge, vale il codice. Layout attuale: barra laterale (`StatusHeader.vue`: radar `FlowHero.vue`, nome del PC, selettore Visible / Temporarily / Hidden, cartella download e porta) + area **Activity** (`ConsentCard` in alto, `SendPane` + `DeviceBoard`, `TransferQueue` raggruppata in NOW / TODAY / EARLIER). `FlowDiagram.vue` è stato rimosso. Il tema chiaro/scuro segue il sistema (`composables/systemTheme.ts`, token `--qsd-*`). Le viste `ReceiveView`/`SendView` e `SettingsModal` citate sotto non esistono: c'è un'unica `App.vue` e `composables/SettingsDrawer.vue`.
+> **Aggiornamento (GUI attuale, dopo `feat/ui-redesign`):** il documento descrive il progetto originale; dove diverge, vale il codice. Layout attuale: barra laterale (`StatusHeader.vue`: radar `FlowHero.vue`, nome del PC, selettore Visible / Temporarily / Hidden, cartella download e porta) + area **Activity** (`ConsentCard` in alto, `SendPane` + `DeviceBoard`, `TransferQueue` raggruppata in NOW / TODAY / EARLIER). `FlowDiagram.vue` è stato rimosso. Il tema chiaro/scuro segue il sistema (`composables/systemTheme.ts`, token `--qsd-*`). Le viste `ReceiveView`/`SendView`, `HomePage.vue` e `SettingsModal` citate sotto non esistono (più): c'è un'unica `App.vue` e `composables/SettingsDrawer.vue`.
 
 ---
 
@@ -15,7 +17,7 @@
 |---|---|---|
 | V1 | Il core espone **solo API Rust in-process** (`RQS` + canali tokio: `broadcast::Sender<ChannelMessage>`, `broadcast::Sender<EndpointInfo>` via discovery, `mpsc::Sender<SendInfo>`, `watch::Sender<Visibility>`). Nessun REST/RPC/socket/DBus. | La GUI **deve girare nello stesso processo del core**. Qualsiasi GUI fuori processo (web app separata, Electron con sidecar, TUI su altro binario) richiederebbe un bridge IPC nuovo = modifica al perimetro core. Scartate. |
 | V2 | `core_lib` dipende già da `serde` ma **nessun tipo di dominio deriva `Serialize/Deserialize`** (verificato con grep: zero match su `serde` in `core_lib/src`). | Il wire format GUI↔core **non può riusare i tipi core tal quali** via JSON. Serve un **DTO layer in `app/main/src-tauri`** (serde lì già presente) con `From` mapping. Zero modifiche a `core_lib/`. |
-| V3 | `app/main` (Tauri 2 + Vue 3) **non compila** contro il core attuale: `RQS::new` a 4 args (GUI ne passa 3, `main.rs:130`), `rqs_lib::State` e `channel::ChannelDirection` non esistono più, `ChannelMessage` è `{id, msg}` ma la GUI legge `direction/info.state/info.meta`, bindings `@martichou/core_lib` stale (ts-rs rimosso). | Non si butta `app/main`: si **riattiva** con un adapter. Il lavoro è meccanico e confinato in `app/main/src-tauri/src` + `app/main/src`. |
+| V3 | [Storico, risolto: oggi `app/main` compila ed è la GUI attuale] `app/main` (Tauri 2 + Vue 3) **non compilava** contro il core di allora: `RQS::new` a 4 args (GUI ne passa 3, `main.rs:130`), `rqs_lib::State` e `channel::ChannelDirection` non esistono più, `ChannelMessage` è `{id, msg}` ma la GUI legge `direction/info.state/info.meta`, bindings `@martichou/core_lib` stale (ts-rs rimosso). | Non si butta `app/main`: si **riattiva** con un adapter. Il lavoro è meccanico e confinato in `app/main/src-tauri/src` + `app/main/src`. |
 | V4 | Invio BLE (`hdl::send_files_ble`, `discover_receivers`, `BleReceiver`) non passa per `RQS`/`TcpServer`: è un driver autonomo con `bluer::Adapter` + `broadcast::Sender<ChannelMessage>` proprio + `CancellationToken`. | L'invio BLE in GUI è **fase 2**: nuovo comando Tauri che esegue il driver in un task dedicato. Nessuna modifica al driver. |
 | V5 | CLI headless resta il riferimento UX (consenso con PIN + timeout `QSD_CONSENT_TIMEOUT=60s`, notifiche, `ShowItems` via FileManager1, copia testo, open link). | La GUI deve replicare **almeno** quella semantica: consenso con PIN e timeout, idempotenza (il core ripete gli update di stato), dedup per `id`. |
 
@@ -29,7 +31,7 @@
 
 | Livello | Scelta | Perché (e alternative scartate) |
 |---|---|---|
-| Shell desktop | **Tauri 2** (`app/main/src-tauri`, crate `rquickshare`) | Solo modo per ospitare `rqs_lib` in-process senza bridge (V1). Plugin già dichiarati: `store, dialog, notification, shell, autostart, clipboard, single-instance, tray-icon`. Scartati: Electron (bundle ~150 MB, servirebbe comunque sidecar Rust), .NET/GTK nativo (rewrite UI, perdita Vite/Tailwind), web server embedded (nuova superficie di rete + auth da progettare, modifica al perimetro). |
+| Shell desktop | **Tauri 2** (`app/main/src-tauri`, crate `directdrop` (all'epoca `rquickshare`)) | Solo modo per ospitare `rqs_lib` in-process senza bridge (V1). Plugin già dichiarati: `store, dialog, notification, shell, autostart, clipboard, single-instance, tray-icon`. Scartati: Electron (bundle ~150 MB, servirebbe comunque sidecar Rust), .NET/GTK nativo (rewrite UI, perdita Vite/Tailwind), web server embedded (nuova superficie di rete + auth da progettare, modifica al perimetro). |
 | Frontend | **Vue 3.5 + Pinia + Tailwind** (già in `app/main/package.json`) | La logica di presentazione esiste già (`HomePage.vue` 379 righe, `SideMenu/ContentStatus/SettingsModal/ItemSide/Heading`). Si refactorizza, non si riscrive. Scartati: React/Svelte (rewrite immotivato), TUI ratatui (perde drag&drop file, notifiche, tray — core UX del prodotto). |
 | Tipi condivisi | **DTO hand-written versionati**, non ts-rs | ts-rs è stato rimosso dalle dipendenze e i `core_lib/bindings/*.ts` sono stale. Reintrodurre derive macro nel core violerebbe il vincolo. I DTO vivono in `app/main/src-tauri/src/dto.rs` (Rust/serde) + `app/main/src/types/qsd.ts` (TS), con `DTO_VERSION` e test di snapshot (vedi §5). `tauri-specta` valutabile in seguito, non ora (aggiungerebbe codegen al build). |
 | Package manager | **pnpm 9.7** (già pinnato) | La dipendenza `link:../../core_lib` va **rimossa** (era solo per i bindings stale). |
@@ -60,8 +62,8 @@ app/main/src/
     session.ts            # NEW: visibility, device_name, download_path, discoveryRunning
     transferGroups.ts     # NEW: funzioni pure per l'elenco Activity (NOW / TODAY / EARLIER, velocità media AVG)
     toasts.ts             # KEEP: esistente useToastStore
-  views/ ReceiveView.vue  # NEW (refactor di HomePage: sezione ricezione)
-  views/ SendView.vue     # NEW (refactor di HomePage: sezione invio)
+  views/ ReceiveView.vue  # NEW (refactor di HomePage: sezione ricezione) — mai creato, vedi nota in testa
+  views/ SendView.vue     # NEW (refactor di HomePage: sezione invio) — mai creato, vedi nota in testa
   components/ StatusHeader.vue (barra laterale), FlowHero.vue (radar), SendPane.vue, DeviceBoard.vue, DeviceRow.vue,
              TransferQueue.vue (Activity), TransferCard.vue, ConsentCard.vue, TransportBadge.vue, ProgressBar.vue  # NEW
   composables/            # SettingsDrawer.vue, systemTheme.ts (tema di sistema)
@@ -278,13 +280,13 @@ Filtro display esistente (`stateToDisplay` in `vue_lib/types.ts`) riusato come d
 
 ## 5. Fasi, test, rischi
 
-**F0 — Compila (1–2 gg):** `main.rs` fix `RQS::new(v,port,path,Some(device_name))`, `dto.rs` + `qsd.ts` + `bridge.rs`, 8 comandi §3.1 (senza `ble_*`), rimozione `link:../../core_lib`, `HomePage.vue` adattata ai nuovi nomi (logica invariata). Criterio: `cargo check -p rquickshare` + `pnpm dev` verdi.
+**F0 — Compila (1–2 gg):** `main.rs` fix `RQS::new(v,port,path,Some(device_name))`, `dto.rs` + `qsd.ts` + `bridge.rs`, 8 comandi §3.1 (senza `ble_*`), rimozione `link:../../core_lib`, `HomePage.vue` adattata ai nuovi nomi (logica invariata). Criterio: `cargo check -p directdrop` + `pnpm dev` verdi.
 **F1 — Ricezione (parità CLI):** store/view §4, consenso con countdown, notifiche, test Vitest su upsert/dedup/timeout + `cargo test` snapshot DTO.
 **F2 — Invio LAN:** `qsd_send_lan` + `SendView` mDNS (parità `app/main` originale).
 **F3 — Invio BLE (chiude il gap col fork):** `ble_send.rs` + task registry `HashMap<send_id, CancellationToken>` in `AppState`; `SendView` sezione BLE. Nessuna modifica a `send.rs/join.rs/hotspot.rs`.
 **F4 — Polish/packaging:** icone/tray, update-check esistente, `.desktop` opzionale GUI, docs utente. Il daemon systemd resta il default installato; la GUI è opt-in (non si toccano `Makefile`/`packaging/` in F0–F3).
 
-**Test:** `cargo test -p rquickshare` (mapping DTO↔fixture JSON, `DTO_VERSION` sync con `qsd.ts`); `pnpm test` (store: upsert idempotente, Lagged-skip, countdown auto-decline, present:false removal); manuale con `tools/dev/qs-*.sh` come da REPO_SUMMARY §9 (service user stoppato, porte 46257/46258 libere).
+**Test:** `cargo test -p directdrop` (mapping DTO↔fixture JSON, `DTO_VERSION` sync con `qsd.ts`); `pnpm test` (store: upsert idempotente, Lagged-skip, countdown auto-decline, present:false removal); manuale con `tools/dev/qs-*.sh` come da REPO_SUMMARY §9 (service user stoppato, porte 46257/46258 libere).
 
 **Rischi:** (1) `broadcast` lag sotto transfer veloci (~35 MB/s) → mitigato da throttle+skip; (2) `device_name` richiede restart annunci → hint UI, mai restart automatico durante transfer; (3) BLE scan richiede adapter BlueZ + permessi → errori mappati in toast, mai crash; (4) divergenza futura core → i DTO isolano la GUI: se il core cambia, si aggiorna solo `dto.rs`+snapshot.
 
