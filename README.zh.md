@@ -108,14 +108,14 @@ GUI 在进程内运行 `rqs_lib`。边界恰好是两个新文件加一份版本
 - `app/main/src-tauri/src/bridge.rs` — 订阅核心 `broadcast`/`watch` 通道（`message_sender`、`dch_sender`、`visibility_sender`、`ble_receiver`），并重新发射经节流 / 去重的 Tauri 事件。进度事件已节流（状态变化时发射，或增量 ≥256 KiB，或间隔 ≥500 ms；终止状态必定发射）。`Lagged` 广播溢出仅记录 debug 日志并跳过，绝不崩溃——与 CLI 策略相同。
 - `app/main/src/types/qsd.ts` — `dto.rs` 的严格 TypeScript 镜像（事件名、`VisibilityDto`、包含全部 18 种核心状态的 `TransferStateDto`、`PayloadKindDto`、`TransferDto`、`EndpointDto`、`SendPayloadDto`、`ConsentDto`、`SnapshotDto`、错误码）。包含 `humanSize` / `describeTransfer`（CLI `describe()` 的移植）、`baseName` 和 `validateSendFiles` 辅助函数，以及 `TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES` 集合。
 
-Tauri 命令（位于 `src-tauri/src/cmds/`，在 `main.rs` 中接线）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_open_path`、`qsd_system_theme`、`qsd_get_hostname`（另有旧版 `get_hostname` / `change_download_path` 兼容层）。后端 → 前端事件：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence`、`qsd://system-theme`。
+Tauri 命令（位于 `src-tauri/src/cmds/`，在 `main.rs` 中接线）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_scan_ble`、`qsd_send_ble`、`qsd_cancel_send`、`qsd_open_path`、`qsd_system_theme`、`qsd_get_hostname`（另有旧版 `get_hostname` / `change_download_path` 兼容层）。后端 → 前端事件：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence`、`qsd://system-theme`。
 
 ### 与 CLI 完全一致的行为
 
 - **即时 UKEY2 PIN 验证卡片**（`ConsentCard.vue`）：当核心进入 `WaitingForUserConsent` 即显示发送方名称、设备类型、PIN、负载摘要和文件列表。**60 秒倒计时**环（`QSD_CONSENT_TIMEOUT_MS`，遵循在 `dto.rs` 中读取的 `QSD_CONSENT_TIMEOUT` 环境变量覆盖）到期后卡片失效；到期触发与 CLI 相同的**自动拒绝**（向通道发送 `ConsentDecline`）。接受 / 拒绝 / 取消经由 `ConsentDto::into_channel_message` 与核心 `TransferAction` 一一映射。
-- **三态可见性选择器**（`StatusHeader.vue` → `qsd_set_visibility`）：`Visible`、`Temporarily`（60 秒，带琥珀色脉冲圆点和剩余时间显示）、`Hidden`（`Invisible`）。Temporarily→Invisible 计时器位于核心 `mdns.rs`；GUI 仅反映 `qsd://visibility` 事件并经由 Tauri store 持久化。不在 GUI 侧重新实现计时器。
+- **三态可见性选择器**（`StatusHeader.vue` → `qsd_set_visibility`）：`Visible`、`Temporarily`（60 秒，剩余时间显示为 `VISIBLE FOR 0:xx`）、`Hidden`（`Invisible`）。Temporarily→Invisible 计时器位于核心 `mdns.rs`；GUI 仅反映 `qsd://visibility` 事件并经由 Tauri store 持久化。不在 GUI 侧重新实现计时器。
 - **被动 BLE 在场提醒横幅：**核心 BLE 监听器发现以节流（120 秒）的 `qsd://ble-presence` 事件到达。当处于隐藏（`Invisible`）时，桥接层还会触发系统通知，提示开启临时可见窗口；前端显示 info 提示（“附近有手机正在分享——请检查可见性”）。遵循核心 `QSD_BLE_SCAN` / `QSD_NO_BLE_SCAN` 语义。
-- **内联文本 / 链接传输处理，无需强制落盘**（`TransferCard.vue`）：`Text`、`Url` 和 `WiFi` 负载以内联预览加剪贴板复制呈现（Tauri clipboard-manager 插件）；显示时不向磁盘写入文件。文件负载显示接收文件数、文件名和字节精确进度（`ack_bytes` / `total_bytes`）。
+- **内联文本 / 链接传输处理，无需强制落盘**（`TransferCard.vue`）：`Text`、`Url` 和 `WiFi` 负载显示在列表行中（`TEXT`、`LINK`、`WI-FI · SSID`），文本和链接带 COPY / COPY LINK 按钮（Tauri clipboard-manager 插件），链接另有 OPEN；显示时不向磁盘写入文件。文件负载显示接收文件数、文件名和字节精确进度（`ack_bytes` / `total_bytes`）。
 - **出站 LAN/mDNS 文件发送，带常规文件校验**（`SendPane.vue` + `qsd_send_lan`）：经由对话框或拖放暂存文件，选择发现到的 mDNS 端点（`EndpointDto`，`addr = ip:port`），并经由核心 `sender_file` 通道以 `SendInfo { ob: Files }` 发送。校验与 CLI 一致：空选择和目录会被以 `VALIDATION` 错误拒绝（`{f}: not a regular file (folders aren't supported)`）；前端在调用后端前对明显情况快速失败。
 
 ### 从源码运行 GUI
