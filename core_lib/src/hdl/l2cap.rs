@@ -81,6 +81,23 @@ pub async fn l2cap_connect(adapter: &Adapter, rx: &BleReceiver) -> Result<Duplex
         .address_type()
         .await
         .unwrap_or(AddressType::LeRandom);
+    // Hold our own ATT client socket on the link before opening the channel. With it, the kernel
+    // doesn't hand the ATT channel to bluetoothd (see att.rs), whose automatic service discovery
+    // otherwise reads attributes some phones protect (seen with a OnePlus Nord4): BlueZ then asks
+    // to pair in the middle of the transfer, covering the phone's Accept prompt, and the link
+    // drops if pairing is declined. Quick Share doesn't need pairing (its channel is UKEY2
+    // encrypted). QSD_L2CAP_ATT_GUARD=0 turns this off.
+    let att_guard = if std::env::var("QSD_L2CAP_ATT_GUARD").map(|v| v != "0").unwrap_or(true) {
+        match crate::hdl::att::AttClient::connect(rx.address, addr_type).await {
+            Ok((client, _notifications)) => Some(client),
+            Err(e) => {
+                warn!("{INNER_NAME}: ATT guard failed ({e}); bluetoothd may ask to pair");
+                None
+            }
+        }
+    } else {
+        None
+    };
     info!("{INNER_NAME}: connecting to {} PSM {psm}", rx.address);
     let mut s = tokio::time::timeout(
         CONNECT_TIMEOUT,
@@ -114,6 +131,8 @@ pub async fn l2cap_connect(adapter: &Adapter, rx: &BleReceiver) -> Result<Duplex
 
     let (or_side, ours) = tokio::io::duplex(256 * 1024);
     tokio::spawn(async move {
+        // Keeps bluetoothd off the link for as long as the channel lives.
+        let _att_guard = att_guard;
         let (mut l2_rd, mut l2_wr) = tokio::io::split(s);
         let (mut rd, mut wr) = tokio::io::split(ours);
         // Phone → us: acknowledge data packets, drop control packets, forward the data.

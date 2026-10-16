@@ -230,7 +230,7 @@ export function isBleScanStale(lastScanAt: number | null, now: number): boolean 
 
 /** Toast shown when a Bluetooth send ends without reaching the phone. */
 export const BLE_SEND_FAILED_MESSAGE =
-	"Bluetooth send failed. Keep the phone on Receive and scan again, or use the same Wi-Fi. Some phones (e.g. OnePlus Nord4) don't accept Bluetooth sends yet.";
+	'Bluetooth send failed. Keep the phone on its Receive screen and scan again, or use the same Wi-Fi.';
 
 export function isTerminalState(state: TransferStateDto): boolean {
 	return TERMINAL_STATES.has(state);
