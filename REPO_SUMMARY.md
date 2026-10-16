@@ -97,7 +97,7 @@ Nessun `pyproject.toml`, `CMakeLists.txt`, `go.mod`: il progetto è **Rust + Typ
 - `app/main/src-tauri/src/main.rs` → `tauri::Builder` + `invoke_handler` + tray + `AppState`
   (`message_sender`, `dch_sender`, `visibility_sender`, `sender_file: mpsc::Sender<SendInfo>`,
   `ble_receiver`, `rqs: Mutex<RQS>`).
-- `app/main/index.html` + `src/main.ts` → Vue app (`App.vue` → `components/HomePage.vue`, ~379 righe).
+- `app/main/index.html` + `src/main.ts` → Vue app (`App.vue`: barra laterale `StatusHeader.vue` + area Activity con `SendPane`/`DeviceBoard`/`TransferQueue`/`TransferCard`).
 
 ### 4.3 Servizi / sistema
 
@@ -117,10 +117,11 @@ Nessun `pyproject.toml`, `CMakeLists.txt`, `go.mod`: il progetto è **Rust + Typ
 
 | Dove | Cosa | Stato |
 |---|---|---|
-| `app/main/` | Tauri **2** + Vue 3 + Tailwind, tray icon, notifiche, store persistente, discovery, send | tenuta dal fork ma **non buildata/testata**; vedi §7 |
+| `app/main/` | Tauri **2** + Vue 3 + Tailwind (crate `directdrop`), tray icon, notifiche, store persistente, discovery, send; layout a barra laterale (radar `FlowHero.vue`, nome del PC, visibilità, cartella e porta) + area Activity (consenso, pannello SEND, elenco NOW / TODAY / EARLIER); tema chiaro/scuro automatico | GUI attuale del fork (`DTO_VERSION` 1, bridge `dto.rs`/`bridge.rs`); vedi `GUI_ARCHITECTURE.md` |
 | `app/legacy/` | stessa app su Tauri **1** | legacy upstream, stessa situazione |
-| `app/main/src/composables/` | `SideMenu.vue`, `ContentStatus.vue`, `SettingsModal.vue`, `ItemSide.vue`, `Heading.vue` | UI (nessuna logica di business) |
-| `app/main/src/vue_lib/` | `utils.ts` (wrapper su `invoke`), `types.ts` (tipi da `@martichou/core_lib/bindings`) | adapter UI→IPC |
+| `app/main/src/composables/` | `SettingsDrawer.vue`, `systemTheme.ts` (tema di sistema: portale `org.freedesktop.appearance color-scheme` via `qsd_system_theme`/`qsd://system-theme`, riserva su `theme()` di Tauri e sulla media query) | UI (nessuna logica di business) |
+| `app/main/src/stores/` | `session.ts`, `devices.ts`, `transfers.ts` (con `timing`: `startedAt`/`endedAt` lato client), `transferGroups.ts` (raggruppamento NOW / TODAY / EARLIER, velocità media) | stato Pinia |
+| `app/main/src/vue_lib/` | `utils.ts` (wrapper su `invoke`), `types.ts` (tipi da `@martichou/core_lib/bindings`) | adapter UI→IPC (ereditato da upstream; la GUI attuale usa `src/types/qsd.ts`) |
 
 Nessuna **GUI web server-side**, nessuna **TUI** (l'unico "interfaccia a riga" è la CLI + notifiche).
 

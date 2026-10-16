@@ -30,7 +30,6 @@
   <br /><br />
   <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
   <a href="#quick-install-terminal"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
-  <a href="#screenshots"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
 </div>
@@ -82,19 +81,6 @@ GUI bundle. The `.deb`/`.rpm` GUI also adds DirectDrop to the app menu (search
 appimaged, or a manual `.desktop` file). To go back to headless: quit the GUI
 and run `systemctl --user enable --now quickshare-direct`.
 
-## 🖥️ Screenshots
-
-Main window (operate-mode console: status header, live laptop ⇄ phone flow, send pane, device board, transfer queue):
-
-![DirectDrop main window](docs/screenshots/gui-main.svg)
-
-Incoming transfer — UKEY2 PIN verification card with 60s countdown and auto-decline:
-
-![DirectDrop consent card](docs/screenshots/gui-consent.svg)
-
-> [!NOTE]
-> These are schematic placeholders in the app's blueprint style. Replace `docs/screenshots/gui-main.svg` and `docs/screenshots/gui-consent.svg` with real captures (`pnpm tauri dev`, screenshot the window, save as `.png` next to them and update the links above).
-
 Upstream quick-start still applies:
 
 1. **Discovery + first contact over Bluetooth LE** (works with the phone off Wi-Fi).
@@ -119,8 +105,11 @@ The upstream repository keeps rQuickShare's old Tauri app under `app/` but does 
 
 ### Stack and look
 
-- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** Frontend entry is `app/main/src/App.vue`; state lives in Pinia stores (`src/stores/session.ts`, `devices.ts`, `transfers.ts`).
-- **Technical blueprint aesthetic:** dark operate-mode console, tabular monospace metrics, live network-flow diagram between laptop and phone (`FlowDiagram.vue` / `FlowHero.vue`), 1px hairlines, no marketing bloat. Layout: `StatusHeader` → `FlowDiagram` → `SendPane` + `DeviceBoard` → `TransferQueue`, with a thin receiver-details footer (download path, port).
+- **Tauri 2.2, Vue 3.5, Pinia 2.x, Tailwind CSS 3.4.** Frontend entry is `app/main/src/App.vue`; state lives in Pinia stores (`src/stores/session.ts`, `devices.ts`, `transfers.ts`, `transferGroups.ts`).
+- **Sidebar + activity layout:** the left sidebar (`StatusHeader.vue`) holds the radar (`FlowHero.vue`, with waves only while the PC is discoverable), the PC name, the **Visible / Temporarily / Hidden** selector, and the download folder and port. The main area is **Activity**: the incoming-request (consent) card on top, the compact send panel (`SendPane.vue` + `DeviceBoard.vue`), then the transfer list (`TransferQueue.vue`) grouped into **NOW / TODAY / EARLIER**, newest first. UI strings are uppercase English.
+- **Light and dark theme, automatic:** follows the desktop setting. On Linux it reads `org.freedesktop.appearance color-scheme` from the settings portal (`ashpd`, command `qsd_system_theme`, event `qsd://system-theme`), falling back to Tauri's `theme()` and then to the `prefers-color-scheme` media query. Colors are `--qsd-*` tokens.
+- **Transfer rows:** direction, a badge for the link in use (Bluetooth LE, BLE L2CAP, Wi-Fi LAN, Wi-Fi Direct, hotspot), a one-time toast per transfer plus an inline notice when the transfer falls back to a slower link, live speed while running and the average speed (AVG) once finished. **OPEN FILE** / **OPEN FOLDER** appear only on received transfers (one file: both buttons; several files: the folder only).
+- **More reliable receiver (core):** the mDNS and BLE announcement tasks restart themselves with a backoff, so the PC no longer drops off nearby devices after an error; after a failed or cancelled receive the partial files are deleted and the completed ones are kept.
 
 ### Non-invasive in-process Rust bridge
 
@@ -130,12 +119,12 @@ The GUI runs `rqs_lib` in-process. The boundary is exactly two new files plus a 
 - `app/main/src-tauri/src/bridge.rs` — subscribes to the core `broadcast`/`watch` channels (`message_sender`, `dch_sender`, `visibility_sender`, `ble_receiver`) and re-emits throttled/deduped Tauri events. Progress events are throttled (emit on state change, or ≥256 KiB delta, or ≥500 ms; terminal states always emitted). `Lagged` broadcast overflows are skipped with a debug log, never a crash — same policy as the CLI.
 - `app/main/src/types/qsd.ts` — strict TypeScript mirror of `dto.rs` (event names, `VisibilityDto`, `TransferStateDto` with all 18 core states, `PayloadKindDto`, `TransferDto`, `EndpointDto`, `SendPayloadDto`, `ConsentDto`, `SnapshotDto`, error codes). Includes the `humanSize` / `describeTransfer` (port of the CLI `describe()`), `baseName`, and `validateSendFiles` helpers, plus `TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES` sets.
 
-Tauri commands exposed (`src-tauri/src/cmds/`, wired in `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_get_hostname` (plus legacy `get_hostname` / `change_download_path` shims). Events backend → frontend: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`.
+Tauri commands exposed (`src-tauri/src/cmds/`, wired in `main.rs`): `qsd_snapshot`, `qsd_set_visibility`, `qsd_set_download_path`, `qsd_set_device_name`, `qsd_start_discovery`, `qsd_stop_discovery`, `qsd_consent`, `qsd_send_lan`, `qsd_open_path`, `qsd_system_theme`, `qsd_get_hostname` (plus legacy `get_hostname` / `change_download_path` shims). Events backend → frontend: `qsd://transfer`, `qsd://endpoints`, `qsd://visibility`, `qsd://ble-presence`, `qsd://system-theme`.
 
 ### Full CLI behavioral parity
 
 - **Instant UKEY2 PIN verification card** (`ConsentCard.vue`): sender name, device type, PIN, payload summary, and file list appear as soon as the core reaches `WaitingForUserConsent`. A **60-second countdown** ring (`QSD_CONSENT_TIMEOUT_MS`, honoring the `QSD_CONSENT_TIMEOUT` env override read in `dto.rs`) expires the card; expiry triggers the same **auto-decline** (`ConsentDecline` on the channel) the CLI performs. Accept/Decline/Cancel map 1:1 to core `TransferAction`s via `ConsentDto::into_channel_message`.
-- **3-state visibility selector** (`StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 s, with amber pulse dot and remaining-time display), `Hidden` (`Invisible`). The Temporarily→Invisible timer lives in core `mdns.rs`; the GUI only reflects the `qsd://visibility` event and persists it via the Tauri store. No GUI-side timer reimplementation.
+- **3-state visibility selector** (sidebar, `StatusHeader.vue` → `qsd_set_visibility`): `Visible`, `Temporarily` (60 s, with amber pulse dot and remaining-time display), `Hidden` (`Invisible`). The Temporarily→Invisible timer lives in core `mdns.rs`; the GUI only reflects the `qsd://visibility` event and persists it via the Tauri store. No GUI-side timer reimplementation.
 - **Passive BLE presence alert banner:** core BLE listener sightings arrive as throttled (120 s) `qsd://ble-presence` events. When hidden (`Invisible`), the bridge additionally fires a system notification prompting a temporary visibility window; the frontend surfaces an info toast ("A phone nearby is sharing — check visibility"). Honors `QSD_BLE_SCAN` / `QSD_NO_BLE_SCAN` core semantics.
 - **Inline text/URL transfer handling without forced disk writes** (`TransferCard.vue`): `Text`, `Url`, and `WiFi` payloads render inline with preview plus clipboard copy (Tauri clipboard-manager plugin); no file is written to disk to display them. File payloads show RX file count, names, and byte-accurate progress (`ack_bytes` / `total_bytes`).
 - **Outbound LAN/mDNS file sending with regular-file validation** (`SendPane.vue` + `qsd_send_lan`): stage files via dialog or drag-and-drop, pick a discovered mDNS endpoint (`EndpointDto`, `addr = ip:port`), and send through the core `sender_file` channel as `SendInfo { ob: Files }`. Validation matches the CLI: empty selections and directories rejected with `VALIDATION` errors (`{f}: not a regular file (folders aren't supported)`); the frontend fails fast on obvious cases before invoking the backend.
@@ -147,6 +136,7 @@ cd app/main
 pnpm install
 pnpm tauri dev     # live GUI against local core_lib (path dep: ../../core_lib)
 pnpm ts-check       # vue-tsc --noEmit contract check
+pnpm lint           # eslint
 pnpm test           # vitest suite (tests/)
 pnpm build          # production Tauri bundle
 ```

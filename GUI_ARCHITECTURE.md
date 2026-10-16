@@ -5,6 +5,8 @@
 > `app/main/src-tauri/src/{main,cmds/*,store}.rs`, `app/main/src/{components/HomePage.vue,vue_lib/*}`.
 > Branch di lavoro: `DeveloperMatt02/plan-gui-arch` (identico a `main`, nessun commit GUI).
 
+> **Aggiornamento (GUI attuale, dopo `feat/ui-redesign`):** il documento descrive il progetto originale; dove diverge, vale il codice. Layout attuale: barra laterale (`StatusHeader.vue`: radar `FlowHero.vue`, nome del PC, selettore Visible / Temporarily / Hidden, cartella download e porta) + area **Activity** (`ConsentCard` in alto, `SendPane` + `DeviceBoard`, `TransferQueue` raggruppata in NOW / TODAY / EARLIER). `FlowDiagram.vue` è stato rimosso. Il tema chiaro/scuro segue il sistema (`composables/systemTheme.ts`, token `--qsd-*`). Le viste `ReceiveView`/`SendView` e `SettingsModal` citate sotto non esistono: c'è un'unica `App.vue` e `composables/SettingsDrawer.vue`.
+
 ---
 
 ## 0. Vincoli e decisioni quadro
@@ -56,11 +58,13 @@ app/main/src/
     transfers.ts          # NEW: Pinia store trasferimenti (inbound+outbound)
     devices.ts            # NEW: endpoint mDNS + ricevitori BLE
     session.ts            # NEW: visibility, device_name, download_path, discoveryRunning
+    transferGroups.ts     # NEW: funzioni pure per l'elenco Activity (NOW / TODAY / EARLIER, velocità media AVG)
     toasts.ts             # KEEP: esistente useToastStore
   views/ ReceiveView.vue  # NEW (refactor di HomePage: sezione ricezione)
   views/ SendView.vue     # NEW (refactor di HomePage: sezione invio)
-  components/ TransferCard.vue, ConsentCard.vue, DeviceRow.vue, ProgressBar.vue  # NEW
-  composables/            # KEEP: Heading, SideMenu, ContentStatus, ItemSide, SettingsModal
+  components/ StatusHeader.vue (barra laterale), FlowHero.vue (radar), SendPane.vue, DeviceBoard.vue, DeviceRow.vue,
+             TransferQueue.vue (Activity), TransferCard.vue, ConsentCard.vue, TransportBadge.vue, ProgressBar.vue  # NEW
+  composables/            # SettingsDrawer.vue, systemTheme.ts (tema di sistema)
   vue_lib/                # MOD: utils.ts riscritto sui nuovi invoke/event; types.ts deprecato
 ```
 
@@ -172,6 +176,8 @@ Mapping note (da implementare in `dto.rs`, mai nel core):
 | `qsd_consent` | `ConsentDto` | `void` | `message_sender.send(ChannelMessage{id, msg: Lib{action}})` | Sostituisce `send_to_rs`. Accept/Decline solo su inbound in `WaitingForUserConsent`; `TransferCancel` su qualsiasi transfer attivo. Dopo l'invio il backend non attende ack (fire-and-forget come la CLI). |
 | `qsd_send_lan` | `SendPayloadDto` | `void` | `sender_file.send(SendInfo{id,name,addr,ob:Files})` | Sostituisce `send_payload`. `addr` = `ip:port` da `EndpointDto`. Solo file regolari (cartelle rifiutate con `VALIDATION`, come la CLI). |
 | `qsd_get_hostname` | — | `string` | `sys_metrics::host::get_hostname()` | KEEP (`get_hostname`). |
+| `qsd_open_path` | `{ name: string \| null, reveal: boolean }` | `void` | Nessuno (solo FS/desktop): risolve `name` nella cartella download (rifiuta percorsi assoluti o che escono dalla cartella) e lo apre o lo mostra nel file manager | Usato da OPEN FILE / OPEN FOLDER (`TransferCard.vue`), solo per le ricezioni. |
+| `qsd_system_theme` | — | `"dark" \| "light" \| null` | Nessuno: legge `org.freedesktop.appearance color-scheme` dal portale (`ashpd`) | `null` = nessuna preferenza; la GUI ripiega su `theme()` di Tauri e sulla media query. |
 | `qsd_ble_devices` (fase 2) | `{ timeout_secs: number }` (default 8, max 30) | `BleReceiverDto[]` | `hdl::discover_receivers(adapter, None, …)` one-shot | Non passa per `RQS`; apre `bluer::Adapter` on-demand. Errore `Bluetooth off` mappato in `GuiError{code:IO}`. |
 | `qsd_ble_send` (fase 2) | `{ send_id: string; address: string; files: string[] }` | `void` (ritorna subito) | `tokio::spawn(send_files_ble(adapter, receiver, files, send_id, message_sender.clone(), ctk))` con `ctk` registrato per `send_id` | Progress via `qsd://transfer` con `kind: Outbound`. |
 | `qsd_ble_cancel` (fase 2) | `{ send_id: string }` | `void` | `ctk.cancel()` per quel `send_id` | Il driver ritorna `Cancelled`; il core emette lo stato terminale. |
@@ -199,6 +205,7 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 | `qsd://endpoints` | `EndpointDto` | bridge su `dch_sender.subscribe()` | `devices.ts`; `present:false` rimuove per `id` |
 | `qsd://visibility` | `{ visibility: VisibilityDto }` | bridge su `visibility_sender` watch + emit dopo `Temporarily`→`Invisible` (60 s, logica già nel core `mdns.rs:110`) | `session.ts`; la GUI non implementa mai il timer da sé |
 | `qsd://ble-presence` | `{ at: number }` | bridge su `ble_receiver` (throttle 120 s) | toast "un telefono sta condividendo ma sei Invisible" (parità con `send_temporarily_notification`) |
+| `qsd://system-theme` | `{ theme: "dark" \| "light" \| null }` | `cmds/system_theme.rs` (osserva il portale) | `composables/systemTheme.ts` aggiorna il tema |
 
 ### 3.3 Esempi wire (JSON effettivo)
 
@@ -230,7 +237,8 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 { endpoints: Map<string,EndpointDto>; ble_receivers: Map<string,BleReceiverDto>;
   actions: { startDiscovery(), stopDiscovery(), refreshBle(timeout) } }
 // stores/transfers.ts
-{ items: Map<string, TransferView>;   // TransferView = TransferDto + ui: {consent_deadline, last_emit}
+{ items: Map<string, TransferView>;   // TransferView = TransferDto + ui: {consent_deadline, expired}
+  timing: Map<string, {startedAt, endedAt|null}>;  // timestamp lato client (non nel DTO; in `timing`, non in `ui`)
   actions: { upsert(dto), consent(id,action), cancel(id), clear(id), sendLan(endpointId) } }
 ```
 
@@ -242,13 +250,15 @@ Vecchi comandi (`start/stop_discovery`, `change_visibility`, `change_download_pa
 |---|---|---|
 | `WaitingForUserConsent` | `ConsentCard` (nome, descrizione file/testo/url/wifi come `describe()` CLI, **PIN grande**, countdown) | Accept / Decline |
 | `ReceivingFiles` / `SendingFiles` / `SentIntroduction` | `TransferCard` attiva + `ProgressBar` (`ack_bytes/total_bytes`, % e rate) | Cancel |
-| `Finished` | Card completata: file→"Show in folder" (via `shell.open` + `FileManager1.ShowItems` best-effort), testo→Copy, url→Open | Open / Copy / Clear |
+| `Finished` | Card completata: file ricevuti→OPEN FILE (solo 1 file) / OPEN FOLDER (`qsd_open_path`; con più file solo la cartella), testo→Copy, url→Open; velocità media AVG; nessun OPEN per gli invii | Open / Copy / Clear |
 | `Rejected` / `Cancelled` / `Disconnected` | Card errore con messaggio | Clear |
 | Tutti gli altri (`Initial…ReceivedPairedKeyResult`) | Riga compatta "Connessione…" (no azioni) — sono transienti di handshake | — |
 
 Filtro display esistente (`stateToDisplay` in `vue_lib/types.ts`) riusato come default, esteso con `SentUkey*` nascosti.
 
 ### 4.3 Viste
+
+> Struttura attuale: vedi la nota di aggiornamento in testa (barra laterale + Activity). Il seguito è il progetto originale.
 
 - **`ReceiveView`** (default): visibilità toggle (Visible/Invisible/Temporarily con hint auto-off 60 s), lista inbound (`transfers` filtrati `kind==Inbound`), empty-state "In attesa — visibile come `<device_name>`".
 - **`SendView`**: picker file (dialog + drag&drop esistente `onDragDropEvent`), lista `devices.endpoints` (mDNS, click→`sendLan`), sezione BLE fase 2 (scan→`ble_receivers`, click→`ble_send`), lista outbound con progress.
