@@ -30,7 +30,6 @@
   <br /><br />
   <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
   <a href="#快速安装终端"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
-  <a href="#截图"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
 </div>
@@ -67,22 +66,9 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 或从[最新版本](https://github.com/DeveloperMatt02/DirectDrop/releases/latest)手动选择构建产物。
 
-## 🖥️ 截图
-
-主窗口（操作模式控制台：状态头、实时笔记本 ⇄ 手机流程、发送面板、设备看板、传输队列）：
-
 ## GUI 与无头守护进程：二选一
 
 GUI 安装包（`.deb` / `.rpm` / `.AppImage`）内置了自己的接收端；`quickshare-direct` 守护进程包则是同一个接收端的无头版本。同时运行两者会让笔记本以相同的设备名称广播两次，并争抢按用户划分的 Wi-Fi 辅助工具（`quickshare-ap@USER`、`quickshare-join@USER`），因此 `get-directdrop.sh` 在安装 GUI 安装包时都会禁用守护进程（`systemctl --user disable --now quickshare-direct`）。`.deb`/`.rpm` 版 GUI 还会将 DirectDrop 添加到应用菜单（搜索“DirectDrop”）；`.AppImage` 在集成之前不会显示（Gear Lever、appimaged，或手动编写 `.desktop` 文件）。要回到无头模式：退出 GUI 并运行 `systemctl --user enable --now quickshare-direct`。
-
-![DirectDrop main window](docs/screenshots/gui-main.svg)
-
-传入传输——UKEY2 PIN 验证卡片，带 60 秒倒计时和自动拒绝：
-
-![DirectDrop consent card](docs/screenshots/gui-consent.svg)
-
-> [!NOTE]
-> 这些是应用蓝图风格的示意占位图。请将 `docs/screenshots/gui-main.svg` 和 `docs/screenshots/gui-consent.svg` 替换为真实截图（运行 `pnpm tauri dev`，截取窗口，保存为同目录下的 `.png` 并更新上方链接）。
 
 上游快速上手流程仍然适用：
 
@@ -108,8 +94,11 @@ GUI 安装包（`.deb` / `.rpm` / `.AppImage`）内置了自己的接收端；`q
 
 ### 技术栈与外观
 
-- **Tauri 2.2、Vue 3.5、Pinia 2.x、Tailwind CSS 3.4。**前端入口为 `app/main/src/App.vue`；状态位于 Pinia stores（`src/stores/session.ts`、`devices.ts`、`transfers.ts`）。
-- **技术蓝图美学：**深色操作模式控制台、表格等宽字体指标、笔记本与手机之间的实时网络流程图（`FlowDiagram.vue` / `FlowHero.vue`）、1px 细线、无营销冗余。布局：`StatusHeader` → `FlowDiagram` → `SendPane` + `DeviceBoard` → `TransferQueue`，底部附带轻量接收端详情页脚（下载路径、端口）。
+- **Tauri 2.2、Vue 3.5、Pinia 2.x、Tailwind CSS 3.4。**前端入口为 `app/main/src/App.vue`；状态位于 Pinia stores（`src/stores/session.ts`、`devices.ts`、`transfers.ts`、`transferGroups.ts`）。
+- **侧边栏 + 活动布局：**左侧边栏（`StatusHeader.vue`）包含雷达（`FlowHero.vue`，仅在电脑可见时显示波纹）、电脑名称、**Visible / Temporarily / Hidden** 选择器，以及下载文件夹和端口。主区域是 **Activity**：顶部为同意请求卡片，其下是紧凑的发送面板（`SendPane.vue` + `DeviceBoard.vue`），然后是按 **NOW / TODAY / EARLIER** 分组、由新到旧排列的传输列表（`TransferQueue.vue`）。界面文字为英文大写。
+- **自动浅色 / 深色主题：**跟随桌面设置。在 Linux 上通过设置门户（`ashpd`，命令 `qsd_system_theme`，事件 `qsd://system-theme`）读取 `org.freedesktop.appearance color-scheme`，并依次回退到 Tauri 的 `theme()` 和 `prefers-color-scheme` 媒体查询。颜色使用 `--qsd-*` 令牌。
+- **传输行：**方向、所用链路的徽章（Bluetooth LE、BLE L2CAP、Wi-Fi LAN、Wi-Fi Direct、hotspot）、回退到较慢链路时每次传输只弹一次 toast 并在行内显示提示、实时速度，以及传输结束后的平均速度（AVG）。**OPEN FILE** / **OPEN FOLDER** 仅出现在接收的传输上（1 个文件：两个按钮都有；多个文件：仅文件夹）。
+- **更可靠的接收端（core）：**mDNS 和 BLE 广播任务会带退避地自动重启，出错后电脑不会再从附近设备中消失；接收出错或被取消后，不完整的文件会被删除，已完成的文件保留。
 
 ### 非侵入式进程内 Rust 桥接
 
@@ -119,7 +108,7 @@ GUI 在进程内运行 `rqs_lib`。边界恰好是两个新文件加一份版本
 - `app/main/src-tauri/src/bridge.rs` — 订阅核心 `broadcast`/`watch` 通道（`message_sender`、`dch_sender`、`visibility_sender`、`ble_receiver`），并重新发射经节流 / 去重的 Tauri 事件。进度事件已节流（状态变化时发射，或增量 ≥256 KiB，或间隔 ≥500 ms；终止状态必定发射）。`Lagged` 广播溢出仅记录 debug 日志并跳过，绝不崩溃——与 CLI 策略相同。
 - `app/main/src/types/qsd.ts` — `dto.rs` 的严格 TypeScript 镜像（事件名、`VisibilityDto`、包含全部 18 种核心状态的 `TransferStateDto`、`PayloadKindDto`、`TransferDto`、`EndpointDto`、`SendPayloadDto`、`ConsentDto`、`SnapshotDto`、错误码）。包含 `humanSize` / `describeTransfer`（CLI `describe()` 的移植）、`baseName` 和 `validateSendFiles` 辅助函数，以及 `TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES` 集合。
 
-Tauri 命令（位于 `src-tauri/src/cmds/`，在 `main.rs` 中接线）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_get_hostname`（另有旧版 `get_hostname` / `change_download_path` 兼容层）。后端 → 前端事件：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence`。
+Tauri 命令（位于 `src-tauri/src/cmds/`，在 `main.rs` 中接线）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_open_path`、`qsd_system_theme`、`qsd_get_hostname`（另有旧版 `get_hostname` / `change_download_path` 兼容层）。后端 → 前端事件：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence`、`qsd://system-theme`。
 
 ### 与 CLI 完全一致的行为
 
@@ -136,6 +125,7 @@ cd app/main
 pnpm install
 pnpm tauri dev     # live GUI against local core_lib (path dep: ../../core_lib)
 pnpm ts-check       # vue-tsc --noEmit contract check
+pnpm lint           # eslint
 pnpm test           # vitest suite (tests/)
 pnpm build          # production Tauri bundle
 ```

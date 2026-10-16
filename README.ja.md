@@ -30,7 +30,6 @@
   <br /><br />
   <a href="https://github.com/DeveloperMatt02/DirectDrop/releases/latest"><img src="https://img.shields.io/badge/⬇_Download_Latest_Release-38bdf8?style=for-the-badge" alt="download latest release" /></a>
   <a href="#クイックインストールターミナル"><img src="https://img.shields.io/badge/🐧_Quick_Install-22c55e?style=for-the-badge" alt="quick install" /></a>
-  <a href="#スクリーンショット"><img src="https://img.shields.io/badge/🖥️_Screenshots-a855f7?style=for-the-badge" alt="screenshots" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/issues/new"><img src="https://img.shields.io/badge/🐛_Report_Bug-f59e0b?style=for-the-badge" alt="report bug" /></a>
   <a href="https://github.com/DeveloperMatt02/DirectDrop/stargazers"><img src="https://img.shields.io/badge/⭐_Star-facc15?style=for-the-badge&logo=github" alt="star" /></a>
 </div>
@@ -65,22 +64,9 @@ sudo apt-get install -y /tmp/directdrop.deb
 
 または[最新リリース](https://github.com/DeveloperMatt02/DirectDrop/releases/latest)からアセットを手動で選択してください。
 
-## 🖥️ スクリーンショット
-
-メインウィンドウです（オペレートモードのコンソール：ステータスヘッダー、ラップトップ ⇄ スマートフォンのライブフロー、送信ペイン、デバイスボード、転送キュー）：
-
 ## GUI とヘッドレスデーモン：どちらか一方をお使いください
 
 GUI バンドル（`.deb` / `.rpm` / `.AppImage`）には受信機能が内蔵されています。`quickshare-direct` デーモンパッケージは、同じ受信機能をヘッドレスで提供します。両方を同時に実行すると、同じデバイス名でラップトップが二重にアドバタイズされ、ユーザーごとの Wi-Fi ヘルパー（`quickshare-ap@USER`、`quickshare-join@USER`）を奪い合うことになります。そのため、`get-directdrop.sh` は GUI バンドルをインストールする際にデーモンを無効化します（`systemctl --user disable --now quickshare-direct`）。`.deb`/`.rpm` 版の GUI は DirectDrop をアプリメニューにも追加します（"DirectDrop" で検索してください）。`.AppImage` 版は統合するまでは追加されません（Gear Lever、appimaged、または手動の `.desktop` ファイルで統合します）。ヘッドレスに戻すには、GUI を終了して `systemctl --user enable --now quickshare-direct` を実行します。
-
-![DirectDrop main window](docs/screenshots/gui-main.svg)
-
-受信転送です — 60 秒カウントダウンと自動辞退付きの UKEY2 PIN 確認カード：
-
-![DirectDrop consent card](docs/screenshots/gui-consent.svg)
-
-> [!NOTE]
-> これらはアプリの設計図スタイルによる概略プレースホルダーです。`docs/screenshots/gui-main.svg` と `docs/screenshots/gui-consent.svg` を実際のキャプチャに置き換えてください（`pnpm tauri dev` でウィンドウを撮影し、それらの隣に `.png` として保存して上記のリンクを更新します）。
 
 上流のクイックスタートは引き続き有効です：
 
@@ -106,8 +92,11 @@ GUI バンドル（`.deb` / `.rpm` / `.AppImage`）には受信機能が内蔵�
 
 ### スタックと外観
 
-- **Tauri 2.2、Vue 3.5、Pinia 2.x、Tailwind CSS 3.4 です。**フロントエンドのエントリは `app/main/src/App.vue` です。状態は Pinia ストア（`src/stores/session.ts`、`devices.ts`、`transfers.ts`）に保持します。
-- **テクニカルな設計図の美学です：**ダークなオペレートモードコンソール、表形式の等幅メトリクス、ラップトップとスマートフォン間のライブネットワークフロー図（`FlowDiagram.vue` / `FlowHero.vue`）、1px のヘアライン、宣伝的な装飾はありません。レイアウトは `StatusHeader` → `FlowDiagram` → `SendPane` + `DeviceBoard` → `TransferQueue` で、薄い受信者詳細フッター（ダウンロードパス、ポート）付きです。
+- **Tauri 2.2、Vue 3.5、Pinia 2.x、Tailwind CSS 3.4 です。**フロントエンドのエントリは `app/main/src/App.vue` です。状態は Pinia ストア（`src/stores/session.ts`、`devices.ts`、`transfers.ts`、`transferGroups.ts`）に保持します。
+- **サイドバーとアクティビティのレイアウトです：**左のサイドバー（`StatusHeader.vue`）には、レーダー（`FlowHero.vue`、PC が見える状態のときだけ波が出ます）、PC 名、**Visible / Temporarily / Hidden** セレクター、ダウンロードフォルダーとポートがあります。メイン領域は **Activity** で、上に同意リクエストのカード、続いてコンパクトな送信パネル（`SendPane.vue` + `DeviceBoard.vue`）、そして **NOW / TODAY / EARLIER** にグループ化した新しい順の転送リスト（`TransferQueue.vue`）が並びます。UI の文字列は大文字の英語です。
+- **ライト／ダークテーマは自動です：**デスクトップの設定に従います。Linux では設定ポータル（`ashpd`、コマンド `qsd_system_theme`、イベント `qsd://system-theme`）から `org.freedesktop.appearance color-scheme` を読み、Tauri の `theme()`、さらに `prefers-color-scheme` メディアクエリへとフォールバックします。色は `--qsd-*` トークンです。
+- **転送行です：**方向、使用中のリンクのバッジ（Bluetooth LE、BLE L2CAP、Wi-Fi LAN、Wi-Fi Direct、hotspot）、遅いリンクへフォールバックしたときの転送ごとに 1 回だけのトーストと行内の通知、リアルタイムの速度、完了後の平均速度（AVG）を表示します。**OPEN FILE** / **OPEN FOLDER** は受信した転送にだけ表示されます（1 ファイル：両方、複数ファイル：フォルダーのみ）。
+- **より信頼できる受信側（core）です：**mDNS と BLE のアナウンス用タスクはバックオフ付きで自動的に再起動するため、エラー後に PC が近くのデバイスから消えなくなりました。受信でエラーや中止があった場合は、未完了のファイルを削除し、完了済みのファイルは残します。
 
 ### 非侵襲的なインプロセス Rust ブリッジ
 
@@ -117,7 +106,7 @@ GUI は `rqs_lib` をインプロセスで実行します。境界は新規フ�
 - `app/main/src-tauri/src/bridge.rs` — コアの `broadcast` / `watch` チャネル（`message_sender`、`dch_sender`、`visibility_sender`、`ble_receiver`）を購読し、スロットル / 重複排除した Tauri イベントを再送出します。進捗イベントはスロットルされます（状態変化時、または ≥256 KiB の差分、または ≥500 ms で送出し、終端状態は常に送出します）。`Lagged` によるブロードキャストオーバーフローはデバッグログでスキップし、クラッシュしません — CLI と同じポリシーです。
 - `app/main/src/types/qsd.ts` — `dto.rs` の厳密な TypeScript ミラーです（イベント名、`VisibilityDto`、18 のコア状態すべてを持つ `TransferStateDto`、`PayloadKindDto`、`TransferDto`、`EndpointDto`、`SendPayloadDto`、`ConsentDto`、`SnapshotDto`、エラーコード）。CLI の `describe()` を移植した `humanSize` / `describeTransfer`、`baseName`、`validateSendFiles` ヘルパーに加え、`TERMINAL_STATES` / `ACTIVE_PROGRESS_STATES` / `HANDSHAKE_STATES` セットを含みます。
 
-公開されている Tauri コマンドです（`src-tauri/src/cmds/`、`main.rs` で配線）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_get_hostname`（および旧来の `get_hostname` / `change_download_path` シム）。バックエンド → フロントエンドのイベント：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence` です。
+公開されている Tauri コマンドです（`src-tauri/src/cmds/`、`main.rs` で配線）：`qsd_snapshot`、`qsd_set_visibility`、`qsd_set_download_path`、`qsd_set_device_name`、`qsd_start_discovery`、`qsd_stop_discovery`、`qsd_consent`、`qsd_send_lan`、`qsd_open_path`、`qsd_system_theme`、`qsd_get_hostname`（および旧来の `get_hostname` / `change_download_path` シム）。バックエンド → フロントエンドのイベント：`qsd://transfer`、`qsd://endpoints`、`qsd://visibility`、`qsd://ble-presence`、`qsd://system-theme` です。
 
 ### CLI との完全な動作互換
 
@@ -134,6 +123,7 @@ cd app/main
 pnpm install
 pnpm tauri dev     # live GUI against local core_lib (path dep: ../../core_lib)
 pnpm ts-check       # vue-tsc --noEmit contract check
+pnpm lint           # eslint
 pnpm test           # vitest suite (tests/)
 pnpm build          # production Tauri bundle
 ```
